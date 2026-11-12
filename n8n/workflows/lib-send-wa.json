@@ -1,0 +1,85 @@
+{
+  "id": "kai_lib_send_wa",
+  "name": "lib:send-wa",
+  "nodes": [
+    {
+      "id": "366a2104-7741-4c96-b875-eafb3e1f3aa9",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -200
+      ],
+      "parameters": {
+        "content": "**Library: kirim teks WhatsApp**\nPOST http://n8n:5678/webhook/lib-send-wa\n`{chat_id, text}` — chat_id = JID (628xx@s.whatsapp.net atau xxx@g.us).\nNanti bisa ditambah kirim gambar/video (sendMedia) di sini, satu tempat.",
+        "width": 480,
+        "height": 130,
+        "color": 4
+      }
+    },
+    {
+      "id": "4faf0735-8489-4d41-9874-dceafd79f236",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "f37ff97f-83f1-4e38-9de3-0f9d353e2862",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lib-send-wa",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "d836d034-8c28-4875-a9fe-948d18951a18",
+      "name": "Kirim via Evolution API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'http://evolution-api:8080/message/sendText/' + ($json.body.instance || $env.EVOLUTION_INSTANCE) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.body.chat_id, text: $json.body.text, delay: 800 }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.EVOLUTION_API_KEY }}"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Kirim via Evolution API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

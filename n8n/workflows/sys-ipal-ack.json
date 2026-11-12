@@ -1,0 +1,155 @@
+{
+  "id": "kai_sys_ipal_ack",
+  "name": "sys:ipal-ack",
+  "nodes": [
+    {
+      "id": "fd3b2ff0-b9bd-4e61-bded-bd742c25daf7",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -180
+      ],
+      "parameters": {
+        "content": "Tiap menit: konfirmasi ✅ laporan IPAL dikirim SETELAH pengirim diam 2 menit (supaya foto/video lanjutan yang masih dikirim tidak terpotong). Satu pesan per dapur.",
+        "width": 480,
+        "height": 100,
+        "color": 4
+      }
+    },
+    {
+      "id": "27766440-530c-4ad6-a902-5ecfac400b7a",
+      "name": "Tiap menit",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c17fe6ed-0b03-432d-8151-6c80b596d5f8",
+      "name": "Cek konfirmasi (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/ipal_pending_acks",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_quiet_minutes: 2 }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "f95451a7-0a4a-4f46-86e4-11e8ac2ab9f5",
+      "name": "Ada konfirmasi?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "a7504c35-5ab0-475a-830c-9c5acffb3225",
+              "leftValue": "={{ $json.reply }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a82e6e7e-2f5f-4ced-aa8d-fe16cfa16a2c",
+      "name": "Kirim konfirmasi",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        -60
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.IPAL_GROUP_JID, text: $json.reply }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Tiap menit": {
+      "main": [
+        [
+          {
+            "node": "Cek konfirmasi (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cek konfirmasi (RPC)": {
+      "main": [
+        [
+          {
+            "node": "Ada konfirmasi?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ada konfirmasi?": {
+      "main": [
+        [
+          {
+            "node": "Kirim konfirmasi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

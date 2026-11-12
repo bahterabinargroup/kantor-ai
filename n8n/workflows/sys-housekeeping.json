@@ -1,0 +1,82 @@
+{
+  "id": "kai_sys_housekeeping",
+  "name": "sys:housekeeping",
+  "nodes": [
+    {
+      "id": "4e30a41e-38b6-4ee7-bcba-0bb7a3d1225f",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -180
+      ],
+      "parameters": {
+        "content": "Tiap 10 menit: tugas macet → gagal & agen jadi Macet; agen santai >30 mnt → Tidur; bersih-bersih data lama.",
+        "width": 440,
+        "height": 100,
+        "color": 4
+      }
+    },
+    {
+      "id": "ac4e9e60-6853-4b2c-a463-800fa2ebbdf6",
+      "name": "Tiap 10 menit",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ef24b4d1-9c36-48fc-b886-fde13e085e76",
+      "name": "Housekeeping (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/housekeeping",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Tiap 10 menit": {
+      "main": [
+        [
+          {
+            "node": "Housekeeping (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

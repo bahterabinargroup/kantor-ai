@@ -1,0 +1,35 @@
+# HTTPS otomatis (Let's Encrypt) untuk domain publik.
+# Domain *.localhost memakai sertifikat internal Caddy.
+
+{$N8N_DOMAIN} {
+	# Endpoint internal: hanya boleh dipanggil antar-container (http://n8n:5678),
+	# tidak dari internet.
+	@internal path /webhook/agent-* /webhook/lib-* /webhook/ctl-* /webhook/wa-incoming*
+	respond @internal "Forbidden" 403
+
+	reverse_proxy n8n:5678
+}
+
+{$EVOLUTION_DOMAIN} {
+	reverse_proxy evolution-api:8080
+}
+
+{$DASHBOARD_DOMAIN} {
+	basic_auth {
+		{$DASHBOARD_USER} {$DASHBOARD_PASS_HASH}
+	}
+	# Tombol di dashboard → webhook internal n8n (sudah lewat basic_auth di atas)
+	@toggle path /api/agent-toggle
+	handle @toggle {
+		rewrite * /webhook/ctl-agent-toggle
+		reverse_proxy n8n:5678
+	}
+	@profile path /api/agent-profile
+	handle @profile {
+		rewrite * /webhook/ctl-agent-profile
+		reverse_proxy n8n:5678
+	}
+	handle {
+		reverse_proxy dashboard:80
+	}
+}

@@ -1,0 +1,79 @@
+{
+  "id": "kai_ctl_agent_profile",
+  "name": "ctl:agent-profile",
+  "nodes": [
+    {
+      "id": "c9309e44-adad-4802-8485-87bb9fe1ca39",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -200
+      ],
+      "parameters": {
+        "content": "Dipanggil form 'Ubah' di dashboard (POST /api/agent-profile → Caddy → webhook ini).\nBody: {agent_id, name, emoji, color}. Hanya lewat dashboard (basic_auth).",
+        "width": 480,
+        "height": 100,
+        "color": 4
+      }
+    },
+    {
+      "id": "45332a1e-772d-4df9-8ec8-f73194e4672e",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "b5bf3516-f75b-46eb-81f4-b3692abb7932",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ctl-agent-profile",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "edd415f3-9c67-4679-892b-1b7d0b11c4d3",
+      "name": "Ubah profil (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/update_agent_profile",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_agent_id: String($json.body.agent_id || ''), p_name: $json.body.name || null, p_emoji: $json.body.emoji || null, p_color: $json.body.color || null }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Ubah profil (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

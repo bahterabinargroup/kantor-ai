@@ -1,0 +1,79 @@
+{
+  "id": "kai_lib_set_status",
+  "name": "lib:set-status",
+  "nodes": [
+    {
+      "id": "55e9e3f7-7640-4023-a078-6044e454d694",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -200
+      ],
+      "parameters": {
+        "content": "**Library: ubah status agen**\nPOST http://n8n:5678/webhook/lib-set-status\n`{agent_id, status: working|idle|blocked|sleeping, detail?, task_id?}`\nMenunggu sampai database terupdate sebelum membalas.",
+        "width": 460,
+        "height": 130,
+        "color": 4
+      }
+    },
+    {
+      "id": "b33522e4-8a5d-467f-a2f4-f03d575efe00",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "eeeccf8a-efd6-4994-a135-90c869f0c8d0",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lib-set-status",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "57b6630d-1c7e-4dd8-ae25-247255ecdfec",
+      "name": "Set status (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/set_agent_status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_agent_id: $json.body.agent_id, p_status: $json.body.status, p_detail: $json.body.detail || null, p_task_id: $json.body.task_id || null }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set status (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

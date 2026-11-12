@@ -1,0 +1,164 @@
+# Kantor AI — fondasi sistem multi-agen (1 VPS, 2–4 vCPU, 4–8 GB RAM)
+# Jalankan:  ./setup.sh   (pertama kali)   |   docker compose up -d
+
+name: kantor-ai
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  # ───────────── Database untuk n8n & Evolution API (lokal, ringan) ─────────────
+  postgres:
+    image: postgres:16-alpine
+    <<: *restart
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?isi POSTGRES_PASSWORD di .env}
+      TZ: ${TZ:-Asia/Jakarta}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    <<: *restart
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ───────────── WhatsApp gateway (Baileys) ─────────────
+  evolution-api:
+    image: evoapicloud/evolution-api:${EVOLUTION_VERSION:-v2.3.0}
+    <<: *restart
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      SERVER_URL: https://${EVOLUTION_DOMAIN}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?isi EVOLUTION_API_KEY di .env}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/evolution
+      DATABASE_CONNECTION_CLIENT_NAME: kantor_ai
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/6
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_REDIS_SAVE_INSTANCES: "false"
+      CACHE_LOCAL_ENABLED: "false"
+      WEBSOCKET_ENABLED: "false"
+      CONFIG_SESSION_PHONE_CLIENT: Kantor AI
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      LOG_LEVEL: ERROR,WARN
+      DEL_INSTANCE: "false"
+      TZ: ${TZ:-Asia/Jakarta}
+    volumes:
+      - evolution_instances:/evolution/instances
+
+  # ───────────── Orkestrator ─────────────
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-latest}
+    <<: *restart
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: postgres
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?isi N8N_ENCRYPTION_KEY di .env}
+      N8N_HOST: ${N8N_DOMAIN}
+      N8N_PROTOCOL: https
+      N8N_PROXY_HOPS: "1"
+      WEBHOOK_URL: https://${N8N_DOMAIN}/
+      GENERIC_TIMEZONE: ${TZ:-Asia/Jakarta}
+      TZ: ${TZ:-Asia/Jakarta}
+      N8N_RUNNERS_ENABLED: "true"
+      # workflow & Code node membaca konfigurasi lewat $env.*
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "168"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      # ── variabel yang dipakai workflow ──
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-kantor-ai}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      WA_ALLOWED_CHATS: ${WA_ALLOWED_CHATS:-}
+      IPAL_GROUP_JID: ${IPAL_GROUP_JID:-}
+      BROWSERLESS_TOKEN: ${BROWSERLESS_TOKEN}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+
+  # ───────────── Browser sandbox (Chromium + Playwright/Puppeteer) ─────────────
+  # Hanya bisa diakses dari dalam jaringan Docker: ws://browserless:3000?token=...
+  browserless:
+    image: ghcr.io/browserless/chromium:latest
+    <<: *restart
+    shm_size: "1gb"
+    mem_limit: 2g
+    environment:
+      TOKEN: ${BROWSERLESS_TOKEN:?isi BROWSERLESS_TOKEN di .env}
+      CONCURRENT: "2"
+      QUEUED: "10"
+      TIMEOUT: "120000"
+      TZ: ${TZ:-Asia/Jakarta}
+
+  # ───────────── Dashboard "Kantor AI" ─────────────
+  dashboard:
+    build: ./dashboard
+    <<: *restart
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+
+  # ───────────── Reverse proxy + HTTPS otomatis ─────────────
+  caddy:
+    image: caddy:2-alpine
+    <<: *restart
+    depends_on: [n8n, evolution-api, dashboard]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      N8N_DOMAIN: ${N8N_DOMAIN}
+      EVOLUTION_DOMAIN: ${EVOLUTION_DOMAIN}
+      DASHBOARD_DOMAIN: ${DASHBOARD_DOMAIN}
+      DASHBOARD_USER: ${DASHBOARD_USER:-admin}
+      DASHBOARD_PASS_HASH: ${DASHBOARD_PASS_HASH:?jalankan ./setup.sh untuk membuat password dashboard}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # ───────────── SLOT: mesin render video (ditambahkan saat agen editor dibuat) ─────────────
+  # renderer:
+  #   build: ./renderer          # Node + FFmpeg + Remotion
+  #   <<: *restart
+  #   volumes:
+  #     - media:/media
+
+volumes:
+  postgres_data:
+  evolution_instances:
+  n8n_data:
+  caddy_data:
+  caddy_config:

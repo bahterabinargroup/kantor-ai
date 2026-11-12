@@ -1,0 +1,219 @@
+{
+  "id": "kai_sys_ipal_reminder",
+  "name": "sys:ipal-reminder",
+  "nodes": [
+    {
+      "id": "7328d2eb-6c0b-4418-a007-9204286f20f8",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -220
+      ],
+      "parameters": {
+        "content": "Dua pengingat ke grup (IPAL_GROUP_JID di .env):\n• 17:00 WIB: dapur yang BELUM lapor hari ini.\n• 06:00 WIB: dapur yang KEMARIN tidak lapor sama sekali.\nSemua sudah lapor → tidak kirim apa-apa.",
+        "width": 460,
+        "height": 130,
+        "color": 4
+      }
+    },
+    {
+      "id": "15acbe61-e485-434a-9224-380e60f1c17c",
+      "name": "17:00 WIB",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 17 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a7bdf8b4-d6ce-4824-80ec-e8cc3133d937",
+      "name": "06:00 WIB",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        220
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "2d40b69a-baa6-45dd-8b41-8b05d5b44e39",
+      "name": "Belum lapor hari ini (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/ipal_pending_today",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "1431c804-bbf3-4e2d-be97-411cd97a488b",
+      "name": "Belum lapor kemarin (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/ipal_pending_yesterday",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "4d460752-7469-42fc-8369-6b061d64511c",
+      "name": "Ada yang belum?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        540,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "277ae671-f189-41eb-a0f7-824c12aae992",
+              "leftValue": "={{ $json.reply }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ed234990-79f9-4f7a-ae0d-3472ec3f95fa",
+      "name": "Kirim pengingat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        40
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.IPAL_GROUP_JID, text: $json.reply }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "17:00 WIB": {
+      "main": [
+        [
+          {
+            "node": "Belum lapor hari ini (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "06:00 WIB": {
+      "main": [
+        [
+          {
+            "node": "Belum lapor kemarin (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Belum lapor hari ini (RPC)": {
+      "main": [
+        [
+          {
+            "node": "Ada yang belum?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Belum lapor kemarin (RPC)": {
+      "main": [
+        [
+          {
+            "node": "Ada yang belum?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ada yang belum?": {
+      "main": [
+        [
+          {
+            "node": "Kirim pengingat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler",
+    "timezone": "Asia/Jakarta"
+  },
+  "pinData": {}
+}

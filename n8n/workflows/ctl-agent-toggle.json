@@ -1,0 +1,79 @@
+{
+  "id": "kai_ctl_agent_toggle",
+  "name": "ctl:agent-toggle",
+  "nodes": [
+    {
+      "id": "1c21259f-e42b-4a56-a3a9-7891f5843a2a",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -200
+      ],
+      "parameters": {
+        "content": "Dipanggil tombol Nyala/Mati di dashboard (POST /api/agent-toggle → Caddy → webhook ini).\nHanya bisa dicapai lewat dashboard (basic_auth); diblokir dari domain n8n publik.\nBody: {agent_id, enabled}",
+        "width": 480,
+        "height": 110,
+        "color": 4
+      }
+    },
+    {
+      "id": "925c265d-7fab-4eb9-a531-e9ff7dd0ef80",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "c27d6351-a515-4b9a-adc8-80873da7d21b",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ctl-agent-toggle",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "351e6950-35f3-41c3-a466-4f49718b167c",
+      "name": "Nyalakan/matikan (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/set_agent_enabled",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_agent_id: String($json.body.agent_id || ''), p_enabled: $json.body.enabled === true }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Nyalakan/matikan (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

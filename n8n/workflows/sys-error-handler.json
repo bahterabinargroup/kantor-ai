@@ -1,0 +1,94 @@
+{
+  "id": "kai_sys_error_handler",
+  "name": "sys:error-handler",
+  "nodes": [
+    {
+      "id": "f1f5c880-348c-4f24-87e2-4762c98243fe",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -180
+      ],
+      "parameters": {
+        "content": "Pasang di tiap workflow agen: Settings → Error workflow → `sys:error-handler`.\nAgen yang error otomatis tampil **Macet** (merah) di dashboard.",
+        "width": 460,
+        "height": 100,
+        "color": 4
+      }
+    },
+    {
+      "id": "4838a263-459c-49a3-8cce-3f6773e8a17a",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "c599520b-1030-439c-82e8-ab3c740a7ecc",
+      "name": "Petakan ke agen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Nama workflow agen harus berbentuk  agent:<id>  agar error bisa dipetakan ke agennya.\nconst e = $input.first().json;\nconst name = e.workflow?.name || '';\nconst m = name.match(/^agent:([a-z0-9_-]+)/i);\nif (!m) return [];   // bukan workflow agen → abaikan (lihat saja di Executions)\nconst msg = `${e.execution?.lastNodeExecuted || 'node?'}: ${e.execution?.error?.message || 'error'}`;\nreturn [{ json: { agent_id: m[1].toLowerCase(), detail: ('Error — ' + msg).slice(0, 280) } }];\n"
+      }
+    },
+    {
+      "id": "e650a436-bd47-4ce2-b44b-ac7e2c17412e",
+      "name": "Status: macet",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-set-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: $json.agent_id, status: 'blocked', detail: $json.detail }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Petakan ke agen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Petakan ke agen": {
+      "main": [
+        [
+          {
+            "node": "Status: macet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

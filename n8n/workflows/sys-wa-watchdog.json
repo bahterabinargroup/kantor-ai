@@ -1,0 +1,170 @@
+{
+  "id": "kai_sys_wa_watchdog",
+  "name": "sys:wa-watchdog",
+  "nodes": [
+    {
+      "id": "d9b43c72-ddc6-422a-a206-9b63f45201dd",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -180
+      ],
+      "parameters": {
+        "content": "Tiap 5 menit: cek webhook Evolution. Kalau URL-nya kosong (bug setelah restart), pasang ulang.",
+        "width": 460,
+        "height": 90,
+        "color": 4
+      }
+    },
+    {
+      "id": "3d82732e-5d3b-4b07-b551-00e14deb233c",
+      "name": "Tiap 5 menit",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "95d97267-144e-42a9-b7a2-65df775b8e50",
+      "name": "Cek webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://evolution-api:8080/webhook/find/' + $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.EVOLUTION_API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "45dadfda-8f1f-4be5-9958-da5bb2959216",
+      "name": "Webhook terpasang?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "471a63f5-138a-4e31-94cd-1e56552e9faa",
+              "leftValue": "={{ $json.url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7bdd2cfd-6c9a-419a-8035-c9216227b9ff",
+      "name": "Pasang ulang webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'http://evolution-api:8080/webhook/set/' + $env.EVOLUTION_INSTANCE }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ enabled: true, url: 'http://n8n:5678/webhook/wa-incoming?secret=' + $env.WEBHOOK_SECRET, webhookByEvents: false, webhookBase64: true, events: ['MESSAGES_UPSERT'] }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.EVOLUTION_API_KEY }}"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Tiap 5 menit": {
+      "main": [
+        [
+          {
+            "node": "Cek webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cek webhook": {
+      "main": [
+        [
+          {
+            "node": "Webhook terpasang?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook terpasang?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Pasang ulang webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

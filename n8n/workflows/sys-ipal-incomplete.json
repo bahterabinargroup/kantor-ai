@@ -1,0 +1,155 @@
+{
+  "id": "kai_sys_ipal_incomplete",
+  "name": "sys:ipal-incomplete",
+  "nodes": [
+    {
+      "id": "9decd434-ae7d-4331-be0a-7d1a6bce9e58",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -180
+      ],
+      "parameters": {
+        "content": "Tiap 5 menit: teks nama dapur tanpa foto (atau foto tanpa nama dapur) yang tidak berpasangan setelah 20 menit → satu pengumuman 'laporan tidak lengkap' ke grup. Sekali saja per laporan.",
+        "width": 480,
+        "height": 100,
+        "color": 4
+      }
+    },
+    {
+      "id": "64a3a250-01cb-44d0-999c-8b8b569c59a0",
+      "name": "Tiap 5 menit",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d7c2182e-7834-4043-90e7-44f1515f85ca",
+      "name": "Cek tidak lengkap (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/ipal_incomplete_notices",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_minutes: 20 }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "be6fc08c-7aee-407a-85ef-688124185314",
+      "name": "Ada yang tidak lengkap?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "8e1bad10-5147-46ed-a317-8e582662da7a",
+              "leftValue": "={{ $json.reply }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d24c9d77-407d-43f8-8222-21bc3a1ab49e",
+      "name": "Umumkan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        -60
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.IPAL_GROUP_JID, text: $json.reply }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Tiap 5 menit": {
+      "main": [
+        [
+          {
+            "node": "Cek tidak lengkap (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cek tidak lengkap (RPC)": {
+      "main": [
+        [
+          {
+            "node": "Ada yang tidak lengkap?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ada yang tidak lengkap?": {
+      "main": [
+        [
+          {
+            "node": "Umumkan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

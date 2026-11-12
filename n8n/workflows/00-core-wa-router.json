@@ -1,0 +1,334 @@
+{
+  "id": "kai_00_core_wa_router",
+  "name": "00 · Core WA Router",
+  "nodes": [
+    {
+      "id": "1145e976-8b65-4f7a-bc28-5da32504ddb1",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -260
+      ],
+      "parameters": {
+        "content": "**Pintu masuk semua pesan WhatsApp**\nWebhook ← Evolution API → Normalize (cek secret, filter chat) → `dispatch_message` (anti-duplikat + routing + buat tugas, semua di SQL) → panggil webhook agen `agent-<id>`.\nTidak ada agen cocok: chat pribadi dapat daftar agen, grup diam.\nSlot LLM-router (Gemini) bisa dipasang di antara Normalize dan Dispatch nanti.",
+        "width": 640,
+        "height": 170,
+        "color": 4
+      }
+    },
+    {
+      "id": "057ce6e9-4526-49fb-a1c1-e136726409cb",
+      "name": "Webhook WA",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "464e87cf-cb77-494f-bd6f-c7ed7e4c6c8c",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wa-incoming",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "01010629-9905-4893-8589-5f4881dfd96c",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Menyaring & menormalkan webhook Evolution API (messages.upsert)\nconst item = $input.first().json;\n\n// 1) keamanan: secret di URL webhook\nconst secret = $env.WEBHOOK_SECRET || '';\nif (secret && item.query?.secret !== secret) return [];\n\n// 2) hanya pesan masuk\nconst body = item.body || {};\nconst event = String(body.event || '').toLowerCase().replace(/_/g, '.');\nif (event !== 'messages.upsert') return [];\nconst d = body.data || {};\nconst key = d.key || {};\nif (key.fromMe || !key.id) return [];\n\nconst chatId = key.remoteJid || '';\nif (!chatId || chatId === 'status@broadcast') return [];\n\n// 3) batasi chat/grup yang diizinkan (kosong = semua)\nconst allowed = ($env.WA_ALLOWED_CHATS || '').split(',').map(s => s.trim()).filter(Boolean);\nif (allowed.length && !allowed.includes(chatId)) return [];\n\nconst m = d.message || {};\nconst text = m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption\n          || m.videoMessage?.caption || m.documentMessage?.caption || '';\nconst media = m.imageMessage || m.videoMessage || m.documentMessage || m.audioMessage || null;\n\nreturn [{ json: {\n  message_id: key.id,\n  chat_id: chatId,\n  is_group: chatId.endsWith('@g.us'),\n  sender: key.participant || d.participant || chatId,\n  push_name: d.pushName || '',\n  text,\n  message_type: d.messageType || Object.keys(m)[0] || 'unknown',\n  mimetype: media?.mimetype || null,\n  has_mention: ((m.extendedTextMessage?.contextInfo || m.imageMessage?.contextInfo || {}).mentionedJid || []).length > 0,\n  is_reply: !!((m.extendedTextMessage?.contextInfo || m.imageMessage?.contextInfo || {}).quotedMessage),\n  media_base64: m.base64 || d.base64 || null,   // besar — tidak disimpan ke database\n  instance: body.instance || $env.EVOLUTION_INSTANCE || '',\n  timestamp: d.messageTimestamp || null,\n} }];\n"
+      }
+    },
+    {
+      "id": "672d0e4f-8c0f-4434-837a-f961184aa4ef",
+      "name": "Dispatch (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/dispatch_message",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_message_id: $json.message_id, p_chat_id: $json.chat_id, p_is_group: $json.is_group, p_text: $json.text, p_meta: { sender: $json.sender, push_name: $json.push_name, message_type: $json.message_type, mimetype: $json.mimetype } }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "eea9998d-88c0-465d-94c6-32eedcfac025",
+      "name": "Ada tugas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "63cd606b-5cce-4c59-bfc4-8ec065cf7b2d",
+              "leftValue": "={{ $json.task_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "0e80e53c-e159-4444-82ac-011c68eebda1",
+      "name": "Build payload agen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -100
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Gabungkan pesan asli + hasil dispatch menjadi payload untuk agen\nconst n = $('Normalize').first().json;\nconst d = $input.first().json;\nreturn [{ json: { ...n, raw_text: n.text, text: d.text, task_id: d.task_id, agent_id: d.agent_id } }];\n"
+      }
+    },
+    {
+      "id": "933a3f07-caf2-458b-9b4d-8a9dd1e6ce80",
+      "name": "Panggil agen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'http://n8n:5678/webhook/agent-' + $json.agent_id }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "368f815e-f001-4c28-a932-ca6b9c12b898",
+      "name": "Tandai tugas gagal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        40
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/finish_task",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_task_id: $('Build payload agen').first().json.task_id, p_status: 'failed', p_error: 'workflow agen tidak merespons (belum aktif?)' }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "f74ad6c9-26b2-4eda-9978-6704f0e69004",
+      "name": "Beri tahu gagal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        40
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Normalize').first().json.chat_id, text: '⚠️ Agen ' + $('Build payload agen').first().json.agent_id + ' belum aktif. Hubungi admin.' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "c75a6ce6-57be-44f7-8fe8-d01fc0b8adef",
+      "name": "Ada balasan?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        120
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "216120bb-b11e-43d3-b9eb-c7c28bd6366f",
+              "leftValue": "={{ $json.reply }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "37d179d4-3786-447e-8ec5-1980e88dbb97",
+      "name": "Kirim balasan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Normalize').first().json.chat_id, text: $json.reply }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook WA": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Dispatch (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch (RPC)": {
+      "main": [
+        [
+          {
+            "node": "Ada tugas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ada tugas?": {
+      "main": [
+        [
+          {
+            "node": "Build payload agen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ada balasan?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build payload agen": {
+      "main": [
+        [
+          {
+            "node": "Panggil agen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Panggil agen": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Tandai tugas gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tandai tugas gagal": {
+      "main": [
+        [
+          {
+            "node": "Beri tahu gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ada balasan?": {
+      "main": [
+        [
+          {
+            "node": "Kirim balasan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

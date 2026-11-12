@@ -1,0 +1,217 @@
+{
+  "id": "kai_agent_echo",
+  "name": "agent:echo",
+  "nodes": [
+    {
+      "id": "62d774c7-59b0-4c98-9745-14fe0c8cef45",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -300
+      ],
+      "parameters": {
+        "content": "**TEMPLATE AGEN** — duplikat workflow ini untuk membuat agen baru.\n1. Ganti path webhook jadi `agent-<id>`, nama workflow jadi `agent:<id>`\n2. Ganti `echo` pada node status\n3. Isi pekerjaan di node 'Kerjakan tugas'\n4. Daftarkan agen di tabel `agents` (lihat docs/TAMBAH-AGEN.md)\nPola tetap: working → kerja → balas → finish_task → idle.",
+        "width": 560,
+        "height": 190,
+        "color": 4
+      }
+    },
+    {
+      "id": "0dbb09b3-5c9e-4d00-8100-b6056fbcf82c",
+      "name": "Webhook agen",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "a3b15b43-06fc-4a71-a139-364258cf2194",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-echo",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "a75ee14c-d749-4eaa-b648-cc190e0cd245",
+      "name": "Status: kerja",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-set-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: 'echo', status: 'working', detail: 'Membalas: ' + String($json.body.text || '').slice(0, 60), task_id: $json.body.task_id }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a4ea3617-d05b-4248-bdb7-f3c76d2a4e34",
+      "name": "Jeda demo 2 dtk",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "webhookId": "1eb818d0-bf24-4d1a-bdc5-99fe7e407c6d"
+    },
+    {
+      "id": "6a9421cf-6b97-459b-828f-4c49209110e9",
+      "name": "Kerjakan tugas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// ← GANTI blok ini dengan pekerjaan agen yang sebenarnya.\n// Input: $json.text, $json.chat_id, $json.media_base64, $json.message_type, $json.task_id, ...\nconst p = $('Webhook agen').first().json.body;\nreturn [{ json: { chat_id: p.chat_id, task_id: p.task_id, reply: '🦜 Echo: ' + (p.text || '(kosong)') } }];\n"
+      }
+    },
+    {
+      "id": "6b04db8e-6763-4e57-b0b8-c91f94be9960",
+      "name": "Balas ke WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.reply }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "08dcf0e8-92ad-4757-8fc0-f3121a99420b",
+      "name": "Tutup tugas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/finish_task",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_task_id: $('Kerjakan tugas').first().json.task_id, p_status: 'done', p_result: { reply: $('Kerjakan tugas').first().json.reply } }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "46ee96d9-5405-49a3-a7eb-02db101c9eb8",
+      "name": "Status: santai",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-set-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: 'echo', status: 'idle', detail: 'Selesai' }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook agen": {
+      "main": [
+        [
+          {
+            "node": "Status: kerja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status: kerja": {
+      "main": [
+        [
+          {
+            "node": "Jeda demo 2 dtk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jeda demo 2 dtk": {
+      "main": [
+        [
+          {
+            "node": "Kerjakan tugas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kerjakan tugas": {
+      "main": [
+        [
+          {
+            "node": "Balas ke WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Balas ke WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Tutup tugas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tutup tugas": {
+      "main": [
+        [
+          {
+            "node": "Status: santai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,299 @@
+{
+  "id": "kai_agent_ipal",
+  "name": "agent:ipal",
+  "nodes": [
+    {
+      "id": "c8b6a3d7-d235-49bc-bb9a-65ce2f68bdef",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -300
+      ],
+      "parameters": {
+        "content": "**Agen IPAL** — dipicu pesan grup yang memuat nama dapur/kecamatan atau kata 'ipal'.\nFoto + caption → `ipal_record_report` (cocokkan nama, catat SUDAH hari ini, WIB) → balas singkat.\nTeks dan foto dari pengirim yang sama (≤20 mnt, urutan bebas) digabung. Foto tanpa caption: ditahan diam-diam.",
+        "width": 560,
+        "height": 150,
+        "color": 4
+      }
+    },
+    {
+      "id": "30672112-88c1-4deb-87e1-0550a8ad0751",
+      "name": "Webhook agen",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "144b95fb-be75-469f-95d5-6c888f5914e1",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-ipal",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "31fdaa71-8011-4bcc-8801-d99ed8dab804",
+      "name": "Status: kerja",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-set-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: 'ipal', status: 'working', detail: 'Mencatat laporan dapur', task_id: $json.body.task_id }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "9570fd46-43b2-47d1-8d7c-bdcb7b535553",
+      "name": "Siapkan data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Obrolan biasa bukan laporan: teks tanpa foto yang me-mention/membalas orang atau lebih dari 6 kata diabaikan.\nconst p = $('Webhook agen').first().json.body;\nconst media = !!(p.mimetype && /^(image|video)\\//.test(p.mimetype)) || /^(image|video)Message$/.test(p.message_type || '');\nconst raw = String(p.raw_text || '').trim();\nconst words = raw.split(/\\s+/).filter(Boolean).length;\nconst chatter = !media && (p.has_mention || p.is_reply || words > 6);\nreturn [{ json: { p_message_id: p.message_id, p_chat_id: p.chat_id, p_text: chatter ? '' : raw,\n                  p_has_media: media, p_sender: p.sender } }];\n"
+      }
+    },
+    {
+      "id": "8bdef92d-87a0-437c-a94e-65c7a5c6380c",
+      "name": "Catat laporan (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/ipal_record_report",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "3280587a-18c3-47a6-ac5d-2789ec8f87d6",
+      "name": "Susun balasan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Susun balasan dari hasil ipal_record_report. Diam kalau bukan laporan (obrolan biasa / foto tanpa caption).\nconst p = $('Webhook agen').first().json.body;\nconst r = $input.first().json || {};\nconst rawText = String(p.raw_text || '').trim();\nconst payloadMedia = !!(p.mimetype && /^(image|video)\\//.test(p.mimetype)) || /^(image|video)Message$/.test(p.message_type || '');\nconst hasMedia = (r.has_media !== undefined) ? !!r.has_media : payloadMedia;\nlet reply = '';\nif (r.pending_media) reply = '';   // foto tanpa caption: tunggu teks nama dapur (maks 20 menit), jangan ganggu grup\nelse if (r.matched && r.duplicate) reply = '';\nelse if (r.matched && !hasMedia) reply = '';   // teks saja: tunggu foto 20 menit; sys:ipal-incomplete yang mengumumkan kalau tak datang\nelse if (r.matched) reply = '';   // konfirmasi ✅ dikirim sys:ipal-ack setelah pengirim diam 2 menit (foto/video lanjutan)\nelse if (r.ambiguous && payloadMedia && rawText) reply = '❓ Caption menyebut lebih dari satu dapur. Mohon kirim ulang dengan satu nama dapur saja.';\nelse if (payloadMedia && rawText) reply = '❓ Nama dapur tidak terbaca di caption. Mohon tulis nama dapur, mis. \"IPAL Grabag\".';\nreturn [{ json: { chat_id: p.chat_id, task_id: p.task_id, reply, matched: !!r.matched } }];\n"
+      }
+    },
+    {
+      "id": "0342ff3c-ce8a-448d-96c6-85d3a8ab2039",
+      "name": "Ada balasan?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "fc75c595-690e-4e60-8da7-543af4a0302c",
+              "leftValue": "={{ $json.reply }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f90c87e4-d74b-45f2-afd9-f5698b197659",
+      "name": "Balas ke grup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        -80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.reply }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "232966a8-fe2c-4f0b-9f4f-d314429300b0",
+      "name": "Tutup tugas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/finish_task",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_task_id: $('Susun balasan').first().json.task_id, p_status: 'done', p_result: { matched: $('Susun balasan').first().json.matched } }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "688afeff-aafa-4b1d-91a1-0d8491b4a180",
+      "name": "Status: santai",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-set-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: 'ipal', status: 'idle', detail: 'Selesai' }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook agen": {
+      "main": [
+        [
+          {
+            "node": "Status: kerja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status: kerja": {
+      "main": [
+        [
+          {
+            "node": "Siapkan data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Siapkan data": {
+      "main": [
+        [
+          {
+            "node": "Catat laporan (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Catat laporan (RPC)": {
+      "main": [
+        [
+          {
+            "node": "Susun balasan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Susun balasan": {
+      "main": [
+        [
+          {
+            "node": "Ada balasan?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ada balasan?": {
+      "main": [
+        [
+          {
+            "node": "Balas ke grup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tutup tugas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Balas ke grup": {
+      "main": [
+        [
+          {
+            "node": "Tutup tugas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tutup tugas": {
+      "main": [
+        [
+          {
+            "node": "Status: santai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}
