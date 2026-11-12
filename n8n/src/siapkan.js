@@ -153,6 +153,7 @@ if (media && out.mode === 'ditolak') {
       '{"type":"lembar_harian","date":"YYYY-MM-DD atau null","date_confident":true,',
       ' "shifts":[{"shift":1,"barista":"nama","ink":"blue|red|black|green|other","modal":angka|null,"cash_akhir":angka|null,"qris":angka|null,"discount":angka|null}],',
       ' "sales":[{"item":"nama menu persis seperti tercetak","channel":"cash|qris|online","qty":angka,"ink":"warna garis"}],',
+      ' "pisah_modal":angka|null,',
       ' "expenses":[{"item":"...","amount":angka}],',
       ' "uncertain":["catatan singkat untuk setiap angka atau tulisan yang kamu ragu"]}',
       '',
@@ -162,6 +163,7 @@ if (media && out.mode === 'ditolak') {
       '- sales: satu elemen per menu per kolom (cash/qris/online) per warna tinta. Satu garis tegak = 1; empat garis dengan coretan miring = 5. Garis yang dicoret atau dihapus TIDAK dihitung. Menu tanpa tanda jangan dimasukkan.',
       '- Baris "Rokok Eceran" dan item tulisan tangan di bagian "LAINNYA" juga masuk sales; untuk item LAINNYA sertakan "unit_price" bila harganya tertulis.',
       '- Baris "Rokok Signature" berbeda: angka yang ditulis di kolomnya adalah RUPIAH (mis. 17.500), bukan jumlah batang. Isi "qty" dengan angka rupiah itu (17500).',
+      '- pisah_modal: angka di kotak "Pisah Modal" (kanan atas, mis. 200k jadi 200000). Null bila kosong.',
       '- expenses: setiap barang di kotak "Pengeluaran belanja" beserta nominalnya ("12k" jadi 12000).',
       '- Jangan menebak. Kalau tulisan angka kurang jelas, isi nilai terbaikmu dan tulis keraguannya di "uncertain" (contoh: "cash akhir shift 2 terbaca 58400, mungkin 98000"). Kalau benar-benar tidak terbaca, isi null.'
     ].join('\n');

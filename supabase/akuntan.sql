@@ -860,6 +860,9 @@ on conflict (id) do update
   set name = excluded.name, role = excluded.role, emoji = excluded.emoji, color = excluded.color,
       triggers = excluded.triggers, priority = excluded.priority;
 
+-- "Pisah Modal" = kelebihan kas di atas modal yang dimasukkan ke plastik (uang plastik), dibaca dari kotak kanan lembar
+alter table public.akun_sheets  add column if not exists pisah_modal int generated always as (public.akun_int(raw->'pisah_modal')) stored;
+
 -- ── Laporan harian seperti sheet "LAPORAN HARIAN" (hanya service_role; tertutup untuk dashboard) ──
 -- qris  : pencairan bank bila sudah ada (qris_status='final'), kalau belum angka kertas ('sementara').
 -- online: pendapatan merchant bila sudah ada ('final'), kalau belum angka tally kertas ('sementara').
@@ -889,7 +892,8 @@ select d.tgl as tanggal,
        case when o.merchant is not null then 'final' when s.online_sales is not null then 'sementara' end as online_status,
        s.online_sales                                        as online_kertas,
        o.merchant                                            as online_merchant,
-       case when o.merchant is not null and s.online_sales is not null then s.online_sales - o.merchant end as potongan_online
+       case when o.merchant is not null and s.online_sales is not null then s.online_sales - o.merchant end as potongan_online,
+       s.pisah_modal
   from d
   left join public.akun_sheets s on s.sheet_date = d.tgl
   left join sh on sh.id = s.id

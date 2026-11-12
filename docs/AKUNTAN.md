@@ -12,7 +12,9 @@ Mencatat **pemasukan** (foto lembar harian) dan **pengeluaran** (teks "LAPORAN P
 
 ## Arti istilah
 - **Uang plastik** = uang "Pisah Modal" (kotak kanan di lembar, mis. 200k): kelebihan kas di atas modal ±90–110 ribu, dimasukkan ke plastik dan disimpan di kasir sampai diambil PIC. Pengeluaran bertuliskan "uang plastik" diambil dari simpanan ini, bukan dari laci (`pay_source = plastik`).
-- **Uang berdi** = Cash Berdi (kas laci).
+- **Uang berdi** = Cash Berdi (uang di luar plastik, kas laci).
+- **Pisah Modal** dibaca dari tiap lembar ke kolom `pisah_modal` (tampil di view `akun_v_harian`). Pengambilan oleh PIC tidak dicatat.
+- **Rokok Eceran** Rp2.500 per batang.
 
 ## Pasang (urut)
 1. Deploy zip: `bash ~/Downloads/deploy.sh`
