@@ -98,9 +98,7 @@ out.expense = modeM ? null : parseExpense(raw || text);
 if (modeM) {
   out.mode = modeM[1].toLowerCase();
   const admins = String($env.AKUNTAN_ADMIN_CHATS || '').split(',').map(x => x.trim()).filter(Boolean);
-  if (admins.length === 0) {
-    out.local_reply = 'AKUNTAN_ADMIN_CHATS belum diisi di .env server, jadi data ini belum diterima.';
-  } else if (!admins.includes(p.chat_id)) {
+  if (admins.length === 0 || !admins.includes(p.chat_id)) {   // jalur QRIS/online lewat chat dimatikan bila AKUNTAN_ADMIN_CHATS kosong (data masuk lewat spreadsheet)
     out.local_reply = null; out.mode = 'ditolak';          // diam: bukan chat pengurus (mis. grup staf)
   }
   if (out.mode === 'qris' || out.mode === 'online') {

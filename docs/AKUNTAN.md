@@ -35,6 +35,8 @@ Mencatat **pemasukan** (foto lembar harian) dan **pengeluaran** (teks "LAPORAN P
 Tabel dan view ini tertutup untuk dashboard; hanya n8n (service_role) yang bisa membaca.
 
 ## Kirim pencairan QRIS & pendapatan merchant (grup "Akuntan Berdikari")
+
+> Opsional & tidak dipakai saat ini: pencairan QRIS dan data merchant masuk lewat spreadsheet (nanti ditangani agen akuntan). Biarkan `AKUNTAN_ADMIN_CHATS` kosong; jalur ini otomatis diam.
 Buat grup WhatsApp khusus pengurus (kamu + bot, boleh ditambah akuntan), terpisah dari grup staf. Cari ID-nya dengan `bash scripts/cari-grup-wa.sh "Akuntan"`, isi di `.env`: `AKUNTAN_ADMIN_CHATS=<id grup>`. ID itu juga harus ada di `WA_ALLOWED_CHATS`. Lalu `docker compose up -d n8n`. Dari chat lain (termasuk grup staf) data ini ditolak/diabaikan; kosong = ditolak semua.
 
 - **Pencairan QRIS**: kirim tangkapan layar mutasi bank dengan caption `/akuntan qris`, atau ketik `/akuntan qris` lalu baris `11/11 203.000` (tanggal = tanggal uang masuk di bank; tanggal real QRIS otomatis sehari sebelumnya).
