@@ -168,14 +168,26 @@ if (media && out.mode === 'ditolak') {
       '- Jangan menebak. Kalau tulisan angka kurang jelas, isi nilai terbaikmu dan tulis keraguannya di "uncertain" (contoh: "cash akhir shift 2 terbaca 58400, mungkin 98000"). Kalau benar-benar tidak terbaca, isi null.'
     ].join('\n');
     out.need_vision = true;
-    out.vision_body = {
-      model: $env.AKUNTAN_MODEL || 'claude-sonnet-5-5',
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: [
-        { type: 'image', source: { type: 'base64', media_type: mt, data: b64 } },
-        { type: 'text', text: prompt }
-      ] }]
-    };
+    if (($env.AKUNTAN_VISION || 'anthropic') === 'gemini') {
+      out.vision_provider = 'gemini';
+      out.vision_body = {
+        contents: [{ role: 'user', parts: [
+          { inline_data: { mime_type: mt, data: b64 } },
+          { text: prompt }
+        ] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 4096, responseMimeType: 'application/json' }
+      };
+    } else {
+      out.vision_provider = 'anthropic';
+      out.vision_body = {
+        model: $env.AKUNTAN_MODEL || 'claude-sonnet-5-5',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: mt, data: b64 } },
+          { type: 'text', text: prompt }
+        ] }]
+      };
+    }
   }
 }
 return [{ json: out }];

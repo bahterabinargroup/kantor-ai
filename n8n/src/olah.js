@@ -9,7 +9,9 @@ let v = null;
 let err = s.vision_error || null;
 if (s.need_vision) {
   const r = $input.first().json || {};
-  const t = r.content && r.content[0] && r.content[0].text;
+  const t = s.vision_provider === 'gemini'
+    ? (r.candidates && r.candidates[0] && r.candidates[0].content && r.candidates[0].content.parts && r.candidates[0].content.parts.map(x => x.text || '').join(''))
+    : (r.content && r.content[0] && r.content[0].text);
   if (!t) {
     let m = (r.error && (r.error.message || r.error)) || r.message || 'jawaban kosong';
     err = String(typeof m === 'string' ? m : JSON.stringify(m)).slice(0, 160);
