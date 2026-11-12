@@ -3,7 +3,7 @@
   "name": "sys:ipal-incomplete",
   "nodes": [
     {
-      "id": "316b1507-b1b9-4b90-b91b-cda7befde5ba",
+      "id": "41fdca41-9ce4-47b9-b6d0-8548101e6dd5",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "e76c4013-0a1d-41bf-b281-818a03976291",
+      "id": "16beab73-fe77-4329-bce1-8a9afe909c21",
       "name": "Tiap 5 menit",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -39,7 +39,7 @@
       }
     },
     {
-      "id": "ccd09053-3693-45b3-83f9-72bfba695bf7",
+      "id": "ca5695e7-de0d-464e-aadf-57921cc5f1bb",
       "name": "Cek tidak lengkap (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -60,7 +60,7 @@
       }
     },
     {
-      "id": "948a6b44-fad3-4696-af82-a82508f08436",
+      "id": "695ee565-1936-4030-a9f1-e6c28b2b3e23",
       "name": "Ada yang tidak lengkap?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -77,7 +77,7 @@
           },
           "conditions": [
             {
-              "id": "3cf27acc-4675-447e-a885-73d6903861ea",
+              "id": "af411239-7e12-4063-ab2a-8cf7dcb86ef0",
               "leftValue": "={{ $json.reply }}",
               "rightValue": "",
               "operator": {
@@ -93,7 +93,7 @@
       }
     },
     {
-      "id": "27cb2bf1-daff-4137-96df-1494f905768d",
+      "id": "03aa29a2-307b-442f-b4f1-572d8f80cabc",
       "name": "Umumkan",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,

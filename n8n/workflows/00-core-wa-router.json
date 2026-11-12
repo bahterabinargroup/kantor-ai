@@ -3,7 +3,7 @@
   "name": "00 · Core WA Router",
   "nodes": [
     {
-      "id": "c26cc4c7-d1e4-401d-bd70-200132d33e51",
+      "id": "79de49a9-8430-4c3e-8986-82e402242e86",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "cebba189-4c17-4722-b14b-aeb0329dccfb",
+      "id": "d7aecb13-a098-40be-8bf3-b114fca9945d",
       "name": "Webhook WA",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
         0,
         0
       ],
-      "webhookId": "a9d39554-f3f6-41be-8e48-4ab9c5a0593b",
+      "webhookId": "8a0bc57b-4660-4d80-b455-d69bb447c9f9",
       "parameters": {
         "httpMethod": "POST",
         "path": "wa-incoming",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "3b078409-c4a3-4fa1-a24d-a5bbd6bff30e",
+      "id": "a24a8e6a-ddb7-4a3a-9ee8-e1de50d31fe0",
       "name": "Normalize",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -50,7 +50,7 @@
       }
     },
     {
-      "id": "902f0df3-ba55-42c9-9864-8b2528ac82ac",
+      "id": "446956b3-0002-404c-898d-27976b36c0c0",
       "name": "Dispatch (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -71,7 +71,7 @@
       }
     },
     {
-      "id": "2558c099-d679-4a05-bc4a-0839efdef3cc",
+      "id": "6dfdba2f-37fe-40bb-a3c3-b0235f60fc78",
       "name": "Ada tugas?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -88,7 +88,7 @@
           },
           "conditions": [
             {
-              "id": "02d7c257-1e08-4a4e-aeb2-53e8a6471c3a",
+              "id": "b95d226c-3d22-48db-bb58-12684ba35d42",
               "leftValue": "={{ $json.task_id }}",
               "rightValue": "",
               "operator": {
@@ -104,7 +104,7 @@
       }
     },
     {
-      "id": "526e0233-87f8-4bcb-ace2-05034d9255c0",
+      "id": "b30ffe43-4356-4723-acd8-51a4b6879ca6",
       "name": "Build payload agen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -118,7 +118,7 @@
       }
     },
     {
-      "id": "42031fd9-9642-4d80-81ce-ca733c7e69f5",
+      "id": "dc72fa0c-2ad6-4267-b58d-bccf317bcde4",
       "name": "Panggil agen",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -137,7 +137,7 @@
       "onError": "continueErrorOutput"
     },
     {
-      "id": "ba520293-6dfc-45cb-b69d-fcf28d0f7121",
+      "id": "2c602c02-c659-4961-b88e-adaa393e060b",
       "name": "Tandai tugas gagal",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -158,7 +158,7 @@
       }
     },
     {
-      "id": "6588d395-1514-4270-995e-96e2d1ded0b5",
+      "id": "7464a0a5-07a1-4c21-8448-9e22dbffcbda",
       "name": "Beri tahu gagal",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -176,7 +176,7 @@
       }
     },
     {
-      "id": "f4736cb9-5222-421f-9383-6b11266653b2",
+      "id": "66512ae0-2cd0-412c-a198-1ec0ae59b05e",
       "name": "Ada balasan?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -193,7 +193,7 @@
           },
           "conditions": [
             {
-              "id": "fd12c646-f875-412b-a9db-4f75712293ec",
+              "id": "1789f0be-3cb0-4c08-8ade-588a93f52203",
               "leftValue": "={{ $json.reply }}",
               "rightValue": "",
               "operator": {
@@ -209,7 +209,7 @@
       }
     },
     {
-      "id": "99c6650a-94ba-4f71-a404-3963c09d5bde",
+      "id": "625b45e3-6275-43b2-ac3a-8ac5add52f94",
       "name": "Kirim balasan",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,

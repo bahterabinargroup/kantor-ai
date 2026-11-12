@@ -3,7 +3,7 @@
   "name": "agent:echo",
   "nodes": [
     {
-      "id": "a047b840-f4b9-43ac-ba94-2ea03abc759b",
+      "id": "eb10c0b6-13d7-4a2d-a855-27bc28f94797",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "4ce34ecb-3f73-4ff5-9136-f1c1ef67de7a",
+      "id": "7fc6a8dc-f10a-4d2a-8dbc-b8afbaafde56",
       "name": "Webhook agen",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
         0,
         0
       ],
-      "webhookId": "16d31f4c-8d76-4027-833f-86edb9a3928d",
+      "webhookId": "b51c869d-1703-4ca6-995a-db3da367cace",
       "parameters": {
         "httpMethod": "POST",
         "path": "agent-echo",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "a49e1d94-780a-43a9-8a00-8dacc12a9178",
+      "id": "4add465d-308d-4504-9b04-bb8578cde035",
       "name": "Status: kerja",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -54,7 +54,7 @@
       }
     },
     {
-      "id": "3cc4d105-e2fa-49dd-acc4-55c392529fd3",
+      "id": "6132ccf4-a657-4488-ab1f-3f61dc77aae7",
       "name": "Jeda demo 2 dtk",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
@@ -66,10 +66,10 @@
         "amount": 2,
         "unit": "seconds"
       },
-      "webhookId": "e0dfe649-d533-4e99-a55e-a9803057b67a"
+      "webhookId": "5e05ffdc-e087-4fae-9774-7dd1b084b09d"
     },
     {
-      "id": "f856f2ee-3977-4451-ade6-d924369e5671",
+      "id": "7d63b152-5d6a-4dde-a1ba-703fcc70a19f",
       "name": "Kerjakan tugas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -83,7 +83,7 @@
       }
     },
     {
-      "id": "37ed74cd-ddf4-4b54-bbb8-5b4a9530db27",
+      "id": "52c93575-6661-4b5f-8307-d1b06d7a2522",
       "name": "Balas ke WhatsApp",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -101,7 +101,7 @@
       }
     },
     {
-      "id": "4ddf5de8-9183-449d-b17b-5d5fc3b8dbea",
+      "id": "bcd86b25-6672-4903-9014-25539f49d1f9",
       "name": "Tutup tugas",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -122,7 +122,7 @@
       }
     },
     {
-      "id": "c4d9a857-82d8-4bbc-8a0b-459c2d7756ac",
+      "id": "47d6a118-4db2-4823-899f-300ac99c2154",
       "name": "Status: santai",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,

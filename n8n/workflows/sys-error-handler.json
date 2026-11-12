@@ -3,7 +3,7 @@
   "name": "sys:error-handler",
   "nodes": [
     {
-      "id": "d9a46508-c73f-4543-aecb-fbca2fc0195e",
+      "id": "91d8be9e-b8b2-44a6-ac43-5b336b4d37d2",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "7bda6374-2363-4b6d-8fdf-4824137949a3",
+      "id": "1a3885b1-fa5a-4dbc-a2d0-4b18cd95d91c",
       "name": "Error Trigger",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
@@ -30,7 +30,7 @@
       "parameters": {}
     },
     {
-      "id": "95ee39e4-73f3-4aef-8130-a86137fa973a",
+      "id": "f8e4edb5-a76b-4637-b861-d6c3625b1391",
       "name": "Petakan ke agen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -44,7 +44,7 @@
       }
     },
     {
-      "id": "ea3cd311-000b-416a-ae63-9bb4665d630d",
+      "id": "9b657878-c4fb-4c31-ab6f-37e284897933",
       "name": "Status: macet",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,

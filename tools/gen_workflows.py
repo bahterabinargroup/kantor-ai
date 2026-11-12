@@ -315,7 +315,8 @@ const p = $('Webhook agen').first().json.body;
 const media = !!(p.mimetype && /^(image|video)\//.test(p.mimetype)) || /^(image|video)Message$/.test(p.message_type || '');
 const raw = String(p.raw_text || '').trim();
 const words = raw.split(/\s+/).filter(Boolean).length;
-const chatter = !media && (p.has_mention || p.is_reply || words > 40);
+const reminder = /pengingat|belum\s+(lapor|report|kirim|setor)|tolong\s+(lapor|kirim)/i.test(raw);   // pesan pengingat/sosialisasi dari admin bukan laporan
+const chatter = !media && (p.has_mention || p.is_reply || words > 40 || reminder);
 return [{ json: { p_message_id: p.message_id, p_chat_id: p.chat_id, p_text: chatter ? '' : raw,
                   p_has_media: media, p_sender: p.sender } }];
 """

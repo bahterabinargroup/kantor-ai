@@ -3,7 +3,7 @@
   "name": "ctl:agent-toggle",
   "nodes": [
     {
-      "id": "e1ab9bb9-77ef-41e2-9fb0-470a2812e441",
+      "id": "18a7e7f6-49f9-45ad-aaef-bbccd7616f38",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "14d8194b-1c5b-4178-b230-056db74cb76a",
+      "id": "b97bbe00-5925-4d6f-a1d5-1cb53671ca83",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
         0,
         0
       ],
-      "webhookId": "be5d4c40-18ac-4b90-936d-a45d5934841b",
+      "webhookId": "8f8d96ce-6ca3-4480-9b8e-f11c62a90899",
       "parameters": {
         "httpMethod": "POST",
         "path": "ctl-agent-toggle",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "86fe8b68-adce-4299-842f-1825dbb37d97",
+      "id": "ddc5cedd-abb9-42de-a379-4d05068523f1",
       "name": "Nyalakan/matikan (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
