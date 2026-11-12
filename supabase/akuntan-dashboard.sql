@@ -41,10 +41,10 @@ select jsonb_build_object(
        group by coalesce(mm.name, s.item_name)
        order by sum(s.qty) desc limit 10) q), '[]'::jsonb),
   'toko', coalesce((select jsonb_agg(t order by (t->>'total')::int desc) from (
-      select jsonb_build_object('nama', coalesce(vendor, '(tanpa nama toko)'), 'total', sum(amount)::int) as t
+      select jsonb_build_object('nama', coalesce(vendor, '(nama toko tidak tertulis)'), 'total', sum(amount)::int) as t
         from public.akun_expenses
        where origin = 'laporan' and expense_date between p_from and p_to
-       group by coalesce(vendor, '(tanpa nama toko)') order by sum(amount) desc limit 8) q), '[]'::jsonb),
+       group by coalesce(vendor, '(nama toko tidak tertulis)') order by sum(amount) desc limit 8) q), '[]'::jsonb),
   'perhatian', jsonb_build_object(
       'tanpa_foto', (select count(*) from public.akun_expenses where origin = 'laporan' and not has_media and expense_date between p_from and p_to),
       'qris_belum_cair', (select count(*) from public.akun_v_qris_belum_cair where tanggal between p_from and p_to),
