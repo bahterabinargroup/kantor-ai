@@ -1,0 +1,407 @@
+{
+  "id": "kai_agent_akuntan",
+  "name": "agent:akuntan",
+  "nodes": [
+    {
+      "id": "11bb786d-3714-54e6-9305-c592542b970f",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ],
+      "parameters": {
+        "content": "**Agen Akuntan** — mencatat pemasukan (foto lembar harian) dan pengeluaran (teks laporan + foto nota) kafe Berdikari.\nFoto dibaca model penglihat Claude (`ANTHROPIC_API_KEY`, model `AKUNTAN_MODEL`) → `akun_handle` (RPC) → balasan singkat ke grup.\nFoto TIDAK disimpan di server. Nominal tidak masuk log dashboard (`redact_events`). `/akuntan rekap [kemarin|9 nov]` = rekap manual.",
+        "width": 620,
+        "height": 170,
+        "color": 5
+      }
+    },
+    {
+      "id": "0a101044-2018-528f-849f-1365c4881880",
+      "name": "Webhook agen",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-akuntan",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "e02ee02f-3379-5b98-8778-3b5415a50785"
+    },
+    {
+      "id": "2dbc7bfe-0b10-5185-a338-0de89690e149",
+      "name": "Status: kerja",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-set-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: 'akuntan', status: 'working', detail: 'Mencatat laporan kafe', task_id: $json.body.task_id }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "730881bc-0fb6-5486-9b8f-0d84a0d249ea",
+      "name": "Siapkan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Menyiapkan pesan: laporan pengeluaran (teks), perintah rekap, atau foto yang perlu dibaca model penglihat.\nconst p = $('Webhook agen').first().json.body;\nconst text = String(p.text || '').trim();          // sudah tanpa \"/akuntan\"\nconst raw = String(p.raw_text || '').trim();\nconst media = (!!p.mimetype && /^image\\//.test(p.mimetype)) || p.message_type === 'imageMessage';\n\nconst MON = { jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, jun: 6, jul: 7, agu: 8, agt: 8, ags: 8, sep: 9, okt: 10, nov: 11, des: 12 };\nfunction wibToday() {\n  const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());\n  return s; // YYYY-MM-DD\n}\nfunction iso(y, m, d) {\n  if (!(m >= 1 && m <= 12 && d >= 1 && d <= 31)) return null;\n  const dt = new Date(Date.UTC(y, m - 1, d));\n  if (dt.getUTCMonth() !== m - 1) return null;\n  return dt.toISOString().slice(0, 10);\n}\nfunction parseDate(str) {\n  if (!str) return null;\n  const s = String(str).toLowerCase();\n  const m = s.match(/(\\d{1,2})\\s*[\\/\\-\\.\\s]\\s*([a-z]{3,9}|\\d{1,2})(?:\\s*[\\/\\-\\.\\s]\\s*(\\d{2,4}))?/);\n  if (!m) return null;\n  const d = parseInt(m[1], 10);\n  let mo = /^\\d+$/.test(m[2]) ? parseInt(m[2], 10) : MON[m[2].slice(0, 3)];\n  if (!mo) return null;\n  const today = wibToday();\n  let y = m[3] ? parseInt(m[3], 10) : parseInt(today.slice(0, 4), 10);\n  if (y < 100) y += 2000;\n  let out = iso(y, mo, d);\n  // tanpa tahun dan hasilnya lebih dari 2 hari ke depan → pasti tahun lalu (\"28 des\" ditulis di Januari)\n  if (out && !m[3] && out > new Date(Date.parse(today) + 2 * 86400000).toISOString().slice(0, 10)) out = iso(y - 1, mo, d);\n  return out;\n}\nfunction parseAmount(str) {\n  if (str === null || str === undefined) return null;\n  const s = String(str).toLowerCase().replace(/rp\\.?/g, '').trim();\n  const m = s.match(/(\\d+(?:[.,]\\d+)*)\\s*(jt|juta|k|rb|ribu)?/);\n  if (!m) return null;\n  const unit = m[2] || '';\n  if (unit) {\n    const v = parseFloat(m[1].replace(/\\.(?=\\d{3}(\\D|$))/g, '').replace(',', '.'));\n    if (!isFinite(v)) return null;\n    return Math.round(v * (/^(jt|juta)$/.test(unit) ? 1e6 : 1e3));\n  }\n  const digits = m[1].replace(/[.,](?=\\d{3}(\\D|$))/g, '').replace(/[.,]/g, '');\n  const n = parseInt(digits, 10);\n  return n >= 1000 ? n : null;                      // angka kecil tanpa satuan: terlalu ambigu, minta ditulis ulang\n}\nfunction parseExpense(t) {\n  if (!/laporan\\s+pengeluaran|nominal\\s+pengeluaran/i.test(t)) return null;\n  const e = { reporter: '', date: null, item: '', amount: null, source_raw: '' };\n  const rest = [];\n  for (const line of t.split(/\\r?\\n/)) {\n    const l = line.trim();\n    if (!l) continue;\n    if (/laporan\\s+pengeluaran/i.test(l) && !/[:：]/.test(l)) continue;     // judul\n    const m = l.match(/^([^:：]{2,40}?)\\s*[:：]\\s*(.*)$/);\n    if (!m) { rest.push(l); continue; }\n    const k = m[1].toLowerCase().replace(/\\s+/g, ' ').trim();\n    const v = m[2].trim();\n    if (k === 'nama') e.reporter = v;\n    else if (k.startsWith('nominal')) e.amount = parseAmount(v);\n    else if (k.startsWith('hari') || k === 'tanggal') e.date = parseDate(v);\n    else if (k === 'pengeluaran' || k === 'barang' || k === 'keterangan') e.item = v;\n    else rest.push(l);\n  }\n  e.source_raw = (rest.join(' ') || '').replace(/\\bplatik\\b/gi, 'plastik').toLowerCase().slice(0, 40);\n  return e;\n}\n\nconst MERCH = [['shopee', /shopee/i], ['gofood', /go\\s*-?food|gojek/i], ['grab', /grab/i]];\nfunction merchantOf(t) { for (const [k, re] of MERCH) if (re.test(t)) return k; return null; }\nconst DATE_RE = /\\d{4}-\\d{2}-\\d{2}|\\d{1,2}\\s*[\\/\\-.]\\s*\\d{1,2}(?:\\s*[\\/\\-.]\\s*\\d{2,4})?|\\d{1,2}\\s+(?:jan|feb|mar|apr|mei|jun|jul|agu|agt|ags|sep|okt|nov|des)[a-z]*(?:\\s+\\d{4})?/i;\n// Baris tempelan: \"<tanggal> [merchant] <nominal>\" → {date, merchant, amount}\nfunction parseLines(t, defMerchant) {\n  const rows = [];\n  for (const line of String(t).split(/\\r?\\n/)) {\n    const l = line.trim();\n    const dm = l.match(DATE_RE);\n    if (!dm) continue;\n    const d = /^\\d{4}-/.test(dm[0]) ? dm[0] : parseDate(dm[0]);\n    if (!d) continue;\n    const nums = l.replace(dm[0], ' ').match(/\\d{1,3}(?:[.,]\\d{3})+|\\d{4,}/g);\n    if (!nums) continue;\n    const amount = parseAmount(nums[nums.length - 1]);\n    if (!amount) continue;\n    rows.push({ date: d, merchant: merchantOf(l) || defMerchant || 'lain', amount });\n  }\n  return rows;\n}\n\nconst out = { message_id: p.message_id, chat_id: p.chat_id, sender: p.sender, task_id: p.task_id,\n              media, need_vision: false, expense: null, rekap: false, rekap_date: null, vision_error: null };\n\nout.mode = null; out.text_rows = []; out.local_reply = null;\nconst modeM = text.match(/^(qris|online)\\b\\s*([\\s\\S]*)$/i);\nout.expense = modeM ? null : parseExpense(raw || text);\nif (modeM) {\n  out.mode = modeM[1].toLowerCase();\n  const admins = String($env.AKUNTAN_ADMIN_CHATS || '').split(',').map(x => x.trim()).filter(Boolean);\n  if (admins.length === 0) {\n    out.local_reply = 'AKUNTAN_ADMIN_CHATS belum diisi di .env server, jadi data ini belum diterima.';\n  } else if (!admins.includes(p.chat_id)) {\n    out.local_reply = null; out.mode = 'ditolak';          // diam: bukan chat pengurus (mis. grup staf)\n  }\n  if (out.mode === 'qris' || out.mode === 'online') {\n    const rest = modeM[2] || '';\n    const defM = out.mode === 'online' ? merchantOf(rest.split(/\\r?\\n/)[0]) : null;\n    const tr = parseLines(rest, defM);\n    out.text_rows = out.mode === 'qris' ? tr.map(r => ({ settle_date: r.date, amount: r.amount })) : tr;\n  }\n}\nif (out.local_reply || out.mode === 'ditolak') { out.media = false; }\nif (!out.expense && !out.mode && /^rekap\\b/i.test(text)) {\n  out.rekap = true;\n  const rest = text.replace(/^rekap\\s*/i, '').trim().toLowerCase();\n  if (/^kemarin/.test(rest)) out.rekap_date = new Date(Date.parse(wibToday()) - 86400000).toISOString().slice(0, 10);\n  else out.rekap_date = parseDate(rest);\n}\n\nif (media && out.mode === 'ditolak') {\n  // diam\n} else if (media && out.local_reply) {\n  // ditolak dengan balasan\n} else if (media) {\n  const b64 = String(p.media_base64 || '').replace(/^data:[^;]+;base64,/, '');\n  if (!b64) {\n    out.vision_error = 'foto tidak ikut terkirim ke n8n (media_base64 kosong)';\n  } else {\n    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];\n    const mt = allowed.includes(p.mimetype) ? p.mimetype : 'image/jpeg';\n    const prompt = out.mode === 'qris' ? [\n      'Ini tangkapan layar mutasi rekening bank atau daftar pencairan QRIS kafe. Ambil HANYA baris uang masuk dari pencairan QRIS/merchant (abaikan transfer lain). Balas HANYA satu objek JSON valid (tanpa teks lain, tanpa tanda kutip kode):',\n      '{\"type\":\"settlement\",\"rows\":[{\"settle_date\":\"YYYY-MM-DD tanggal uang masuk di bank\",\"real_date\":\"YYYY-MM-DD tanggal transaksi QRIS bila tertulis, kalau tidak ada null\",\"amount\":angka rupiah penuh}],\"uncertain\":[\"catatan singkat untuk angka atau tanggal yang kamu ragu\"]}',\n      'Rupiah penuh tanpa titik. Tahun kalau tidak tertulis: ' + wibToday().slice(0, 4) + '. Jangan menebak; ragu = tulis di \"uncertain\".'\n    ].join('\\n') : out.mode === 'online' ? [\n      'Ini tangkapan layar pendapatan dari aplikasi merchant (ShopeeFood, GoFood, atau GrabFood). Ambil pendapatan per hari. Pakai angka yang benar-benar diterima merchant (bersih setelah komisi) bila ada beberapa angka. Balas HANYA satu objek JSON valid (tanpa teks lain, tanpa tanda kutip kode):',\n      '{\"type\":\"online_income\",\"rows\":[{\"date\":\"YYYY-MM-DD\",\"merchant\":\"shopee|gofood|grab\",\"amount\":angka rupiah penuh}],\"uncertain\":[\"catatan singkat untuk angka, tanggal, atau jenis angka (kotor/bersih) yang kamu ragu\"]}',\n      'Rupiah penuh tanpa titik. Tahun kalau tidak tertulis: ' + wibToday().slice(0, 4) + '. Jangan menebak; ragu = tulis di \"uncertain\".'\n    ].join('\\n') : [\n      'Kamu membantu mencatat laporan kafe Berdikari Koffee dari foto di grup WhatsApp. Lihat foto, tentukan jenisnya, lalu balas HANYA dengan satu objek JSON valid (tanpa teks lain, tanpa tanda kutip kode).',\n      '',\n      'Jenis foto (\"type\"):',\n      '- \"lembar_harian\": lembar rekap harian kafe. Ciri: tabel Shift 1 / Shift 2 (nama barista, Uang Modal, Cash Akhir, QRIS, Total Discount), daftar menu dengan garis tally di kolom Cash / QRIS / Online, dan kotak \"Pengeluaran belanja\".',\n      '- \"nota\": nota atau struk belanja.',\n      '- \"bukti_bayar\": bukti pembayaran atau transfer (struk token listrik, tagihan wifi/gas, bukti transfer bank atau e-wallet, tangkapan layar pembayaran).',\n      '- \"foto_barang\": foto barang atau bahan yang dibeli.',\n      '- \"lain\": selain itu.',\n      '',\n      'Kalau \"nota\": {\"type\":\"nota\",\"total\":<total nota dalam rupiah penuh, atau null>,\"vendor\":\"<nama toko persis seperti di kop nota, atau null>\"}',\n      'Kalau \"bukti_bayar\": {\"type\":\"bukti_bayar\",\"total\":<jumlah yang dibayar dalam rupiah penuh>,\"date\":\"YYYY-MM-DD tanggal transaksi atau null\",\"item\":\"apa yang dibayar, singkat (mis. Token listrik)\",\"vendor\":\"penerima atau penyedia (mis. PLN) atau null\"}',\n      'Kalau \"foto_barang\" atau \"lain\": {\"type\":\"...\"}',\n      '',\n      'Kalau \"lembar_harian\", isi persis bentuk ini:',\n      '{\"type\":\"lembar_harian\",\"date\":\"YYYY-MM-DD atau null\",\"date_confident\":true,',\n      ' \"shifts\":[{\"shift\":1,\"barista\":\"nama\",\"ink\":\"blue|red|black|green|other\",\"modal\":angka|null,\"cash_akhir\":angka|null,\"qris\":angka|null,\"discount\":angka|null}],',\n      ' \"sales\":[{\"item\":\"nama menu persis seperti tercetak\",\"channel\":\"cash|qris|online\",\"qty\":angka,\"ink\":\"warna garis\"}],',\n      ' \"expenses\":[{\"item\":\"...\",\"amount\":angka}],',\n      ' \"uncertain\":[\"catatan singkat untuk setiap angka atau tulisan yang kamu ragu\"]}',\n      '',\n      'Aturan lembar_harian:',\n      '- Semua uang dalam rupiah penuh tanpa titik (120.000 jadi 120000; \"58k\" jadi 58000). \"date\" dari kolom Hari, Tanggal.',\n      '- Tiap shift biasanya ditulis dengan warna tinta berbeda. Isi \"ink\" pada shifts dengan warna tulisan shift itu, dan \"ink\" pada tiap baris sales dengan warna garis tally itu. Kalau semuanya satu warna, isi apa adanya.',\n      '- sales: satu elemen per menu per kolom (cash/qris/online) per warna tinta. Satu garis tegak = 1; empat garis dengan coretan miring = 5. Garis yang dicoret atau dihapus TIDAK dihitung. Menu tanpa tanda jangan dimasukkan.',\n      '- Baris \"Rokok Eceran\" dan item tulisan tangan di bagian \"LAINNYA\" juga masuk sales; untuk item LAINNYA sertakan \"unit_price\" bila harganya tertulis.',\n      '- Baris \"Rokok Signature\" berbeda: angka yang ditulis di kolomnya adalah RUPIAH (mis. 17.500), bukan jumlah batang. Isi \"qty\" dengan angka rupiah itu (17500).',\n      '- expenses: setiap barang di kotak \"Pengeluaran belanja\" beserta nominalnya (\"12k\" jadi 12000).',\n      '- Jangan menebak. Kalau tulisan angka kurang jelas, isi nilai terbaikmu dan tulis keraguannya di \"uncertain\" (contoh: \"cash akhir shift 2 terbaca 58400, mungkin 98000\"). Kalau benar-benar tidak terbaca, isi null.'\n    ].join('\\n');\n    out.need_vision = true;\n    out.vision_body = {\n      model: $env.AKUNTAN_MODEL || 'claude-sonnet-5-5',\n      max_tokens: 4096,\n      messages: [{ role: 'user', content: [\n        { type: 'image', source: { type: 'base64', media_type: mt, data: b64 } },\n        { type: 'text', text: prompt }\n      ] }]\n    };\n  }\n}\nreturn [{ json: out }];\n"
+      }
+    },
+    {
+      "id": "f7a26ba4-3622-505b-8d31-a27a187d2c60",
+      "name": "Perlu baca foto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "e3c646f2-1542-5bd8-a991-712b4cfc5a40",
+              "leftValue": "={{ $json.need_vision }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3d2a1a4a-9334-52bb-90d5-241c95f19c20",
+      "name": "Baca foto (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        -80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({ 'x-api-key': $env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.vision_body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "94d6eb7a-2136-5c8d-b21b-08690a45bdf2",
+      "name": "Olah hasil",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Gabungkan hasil bacaan foto (bila ada) dengan teks pesan → satu panggilan RPC akun_handle.\nconst s = $('Siapkan').first().json;\nfunction extractJson(t) {\n  const a = t.indexOf('{'), b = t.lastIndexOf('}');\n  if (a < 0 || b <= a) return null;\n  try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { return null; }\n}\nlet v = null;\nlet err = s.vision_error || null;\nif (s.need_vision) {\n  const r = $input.first().json || {};\n  const t = r.content && r.content[0] && r.content[0].text;\n  if (!t) {\n    let m = (r.error && (r.error.message || r.error)) || r.message || 'jawaban kosong';\n    err = String(typeof m === 'string' ? m : JSON.stringify(m)).slice(0, 160);\n  } else {\n    v = extractJson(t);\n    if (!v) err = 'jawaban model bukan JSON';\n  }\n}\nconst base = { message_id: s.message_id, chat_id: s.chat_id, sender: s.sender };\nconst isPhotoKind = v && (v.type === 'nota' || v.type === 'foto_barang' || v.type === 'bukti_bayar');\nlet rpc;\nlet localReply = s.local_reply || null;\nif (s.mode === 'qris' || s.mode === 'online') {\n  const want = s.mode === 'qris' ? 'settlement' : 'online_income';\n  const vr = v && v.type === want && Array.isArray(v.rows) ? v.rows : [];\n  const rows = vr.concat(s.text_rows || []);\n  if (rows.length) rpc = Object.assign({}, base, { kind: want, rows });\n  else {\n    rpc = Object.assign({}, base, { kind: 'ignore' });\n    if (!err) localReply = s.mode === 'qris'\n      ? 'Kirim tangkapan layar mutasi bank dengan caption \"/akuntan qris\", atau ketik baris: 11/11 203.000'\n      : 'Kirim tangkapan layar aplikasi merchant dengan caption \"/akuntan online\", atau ketik baris: 10/11 shopee 97.917';\n  }\n} else if (s.mode === 'ditolak') {\n  rpc = Object.assign({}, base, { kind: 'ignore' });\n} else if (v && v.type === 'lembar_harian') {\n  rpc = Object.assign({}, base, { kind: 'sheet', sheet: v });\n} else if (s.expense) {\n  rpc = Object.assign({}, base, { kind: 'expense_text', expense: s.expense,\n    photo: isPhotoKind ? { type: v.type, total: v.total === undefined ? null : v.total, vendor: v.vendor || null }\n         : (s.media && !v ? { type: 'foto_barang' } : null) });\n} else if (v && v.type === 'bukti_bayar') {\n  rpc = Object.assign({}, base, { kind: 'bukti_bayar', proof: { amount: v.total, date: v.date || null, item: v.item || null, vendor: v.vendor || null } });\n} else if (isPhotoKind) {\n  rpc = Object.assign({}, base, { kind: 'photo', photo: { type: v.type, total: v.total === undefined ? null : v.total, vendor: v.vendor || null } });\n} else if (s.rekap) {\n  rpc = Object.assign({}, base, { kind: 'rekap', date: s.rekap_date });\n} else {\n  rpc = Object.assign({}, base, { kind: 'ignore' });\n}\n// foto gagal dibaca dan tidak ada teks laporan: tandai tugas gagal (tanpa isi pesan) supaya terlihat di dashboard\nconst failed = !!err && s.media && !s.expense && s.mode !== 'ditolak' && !s.local_reply;\n// jawaban model tak terbaca → minta kirim ulang; gangguan teknis (API key, jaringan) → diam, tugas ditandai gagal\nconst unreadable = failed && /bukan JSON/.test(err);\nconst uncertain = (v && Array.isArray(v.uncertain) ? v.uncertain : []).filter(x => x && String(x).trim()).slice(0, 5).map(x => String(x).slice(0, 140));\nreturn [{ json: { p: rpc, kind: rpc.kind, failed, unreadable, error: failed ? err : null, local_reply: localReply, uncertain: (s.mode === 'qris' || s.mode === 'online') ? uncertain : [] } }];\n"
+      }
+    },
+    {
+      "id": "fbce91b6-8635-5b8e-8a4d-9efa812d6758",
+      "name": "Catat (RPC akun_handle)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/akun_handle",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p: $json.p }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "d99e8c87-9294-52e8-9dc0-0974c24b1a47",
+      "name": "Susun balasan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Susun balasan dari hasil akun_handle. Diam kalau tidak ada yang perlu dikabarkan.\nconst p = $('Webhook agen').first().json.body;\nconst o = $('Olah hasil').first().json;\nconst r = $input.first().json || {};\nlet reply = o.unreadable ? 'Foto belum terbaca jelas. Mohon kirim ulang dengan foto lebih terang dan lurus, atau ketik manual.' : (o.failed ? '' : (o.local_reply || r.reply || ''));\nif (reply && o.uncertain && o.uncertain.length) reply += '\\n❓ Mohon dicek:\\n' + o.uncertain.map(x => '• ' + x).join('\\n');\nreturn [{ json: { chat_id: p.chat_id, task_id: p.task_id, reply, kind: o.kind, failed: !!o.failed, error: o.error || null } }];\n"
+      }
+    },
+    {
+      "id": "345968ab-c401-5739-87e9-2ace529c1fb3",
+      "name": "Ada balasan?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1920,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "a4252643-702c-54d3-8df8-26a4dd2d6ce6",
+              "leftValue": "={{ $json.reply }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3f04fd9f-224d-56da-a6a7-caf30d92d443",
+      "name": "Balas ke grup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        -80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.reply }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "453f21e8-e0a7-55ab-b13f-2c81a756d276",
+      "name": "Tutup tugas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/finish_task",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_task_id: $('Susun balasan').first().json.task_id, p_status: $('Susun balasan').first().json.failed ? 'failed' : 'done', p_result: { kind: $('Susun balasan').first().json.kind }, p_error: $('Susun balasan').first().json.error }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "6f0ccf8a-e79b-560d-9e92-0dfbbd4c9e13",
+      "name": "Status: santai",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-set-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: 'akuntan', status: 'idle', detail: 'Selesai' }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook agen": {
+      "main": [
+        [
+          {
+            "node": "Status: kerja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status: kerja": {
+      "main": [
+        [
+          {
+            "node": "Siapkan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Siapkan": {
+      "main": [
+        [
+          {
+            "node": "Perlu baca foto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Perlu baca foto?": {
+      "main": [
+        [
+          {
+            "node": "Baca foto (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Olah hasil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baca foto (Claude)": {
+      "main": [
+        [
+          {
+            "node": "Olah hasil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Olah hasil": {
+      "main": [
+        [
+          {
+            "node": "Catat (RPC akun_handle)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Catat (RPC akun_handle)": {
+      "main": [
+        [
+          {
+            "node": "Susun balasan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Susun balasan": {
+      "main": [
+        [
+          {
+            "node": "Ada balasan?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ada balasan?": {
+      "main": [
+        [
+          {
+            "node": "Balas ke grup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tutup tugas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Balas ke grup": {
+      "main": [
+        [
+          {
+            "node": "Tutup tugas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tutup tugas": {
+      "main": [
+        [
+          {
+            "node": "Status: santai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

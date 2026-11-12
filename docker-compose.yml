@@ -104,6 +104,8 @@ services:
       BROWSERLESS_TOKEN: ${BROWSERLESS_TOKEN}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AKUNTAN_MODEL: ${AKUNTAN_MODEL:-claude-sonnet-5-5}
+      AKUNTAN_ADMIN_CHATS: ${AKUNTAN_ADMIN_CHATS:-}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/workflows:ro
