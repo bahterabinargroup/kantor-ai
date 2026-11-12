@@ -1,0 +1,79 @@
+{
+  "id": "kai_ctl_akuntan_data",
+  "name": "ctl:akuntan-data",
+  "nodes": [
+    {
+      "id": "1969e196-18aa-4d13-8436-baf0a1ee937e",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -200
+      ],
+      "parameters": {
+        "content": "Data halaman Laporan Keuangan (POST /api/akuntan-data → Caddy → webhook ini).\nHanya bisa dicapai lewat dashboard (basic_auth); diblokir dari domain n8n publik.\nBody: {from, to} (YYYY-MM-DD, opsional; default = bulan ini WIB). Hanya membaca, lewat RPC akun_dashboard.",
+        "width": 520,
+        "height": 120,
+        "color": 4
+      }
+    },
+    {
+      "id": "951e8f16-913b-4aca-9957-eb9fdb500894",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "534cccee-6732-4530-99d6-9dea8622d48f",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ctl-akuntan-data",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "9fdfd179-ecd7-4af4-bf8a-6bf88b6151f6",
+      "name": "Ambil data (RPC)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/akun_dashboard",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const b = $json.body || {}; const ok = s => /^\\d{4}-\\d{2}-\\d{2}$/.test(String(s||'')); const now = new Date(Date.now() + 7*3600*1000); const y = now.getUTCFullYear(), m = String(now.getUTCMonth()+1).padStart(2,'0'); const first = y+'-'+m+'-01'; const today = now.toISOString().slice(0,10); return JSON.stringify({ p_from: ok(b.from) ? b.from : first, p_to: ok(b.to) ? b.to : today }); })() }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Ambil data (RPC)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}

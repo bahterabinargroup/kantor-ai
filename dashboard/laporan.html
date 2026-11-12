@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laporan Keuangan · Kantor AI</title>
+<style>
+  :root{--bg:#0b1020;--panel:#121933;--line:#222c52;--text:#e8ecff;--muted:#8b95c9;
+        --in:#22c55e;--out:#f87171;--cash:#38bdf8;--qris:#a78bfa;--online:#fbbf24}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header h1{font-size:17px;margin:0;font-weight:650}
+  header a{color:var(--muted);text-decoration:none;font-size:13px}
+  header a:hover{color:var(--text)}
+  .period{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .period button,.period input{background:#0e1530;color:var(--text);border:1px solid #2b3766;border-radius:9px;padding:6px 10px;font:600 13px system-ui;cursor:pointer}
+  main{max-width:1100px;margin:0 auto;padding:16px 20px 40px;display:grid;gap:14px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+  .box h2{font-size:12px;margin:0 0 10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px}
+  .kpi .v{font-size:26px;font-weight:700;letter-spacing:-.5px}
+  .kpi .s{color:var(--muted);font-size:12px;margin-top:2px}
+  .in{color:var(--in)} .out{color:var(--out)}
+  .split{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#0a1126}
+  .split i{display:block;height:100%}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:13px}
+  .legend span{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+  .legend b{color:var(--text)}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:800px){.two{grid-template-columns:1fr}}
+  .bar{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;gap:8px;align-items:center;margin:7px 0;font-size:13px}
+  .bar .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .t{height:10px;background:#0a1126;border-radius:5px;overflow:hidden}
+  .bar .t i{display:block;height:100%;border-radius:5px}
+  .bar .a{color:var(--muted);font-variant-numeric:tabular-nums}
+  svg text{fill:#8b95c9;font:11px system-ui}
+  .note{margin:6px 0;font-size:13px}
+  .note b{font-variant-numeric:tabular-nums}
+  .empty{color:var(--muted);font-size:13px;padding:8px 0}
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  .wrap{overflow:auto;max-height:360px}
+  #err{display:none;background:#3a1620;border:1px solid #7a2a2a;color:#fecaca;border-radius:12px;padding:10px 14px}
+  small.mut{color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <a href="/">← Kantor</a>
+  <h1>📒 Laporan Keuangan · Berdikari Koffee</h1>
+  <div class="period">
+    <button id="prev" title="Bulan sebelumnya">‹</button>
+    <input id="bulan" type="month">
+    <button id="next" title="Bulan berikutnya">›</button>
+  </div>
+</header>
+<main>
+  <div id="err"></div>
+  <section class="kpis">
+    <div class="box kpi"><h2>Pemasukan</h2><div class="v in" id="k-in">–</div><div class="s" id="k-in-s"></div></div>
+    <div class="box kpi"><h2>Pengeluaran</h2><div class="v out" id="k-out">–</div><div class="s" id="k-out-s"></div></div>
+    <div class="box kpi"><h2>Selisih</h2><div class="v" id="k-net">–</div><div class="s">pemasukan − pengeluaran</div></div>
+    <div class="box kpi"><h2>Rata-rata per hari</h2><div class="v" id="k-avg">–</div><div class="s" id="k-avg-s"></div></div>
+  </section>
+
+  <section class="box">
+    <h2>Dari mana pemasukan</h2>
+    <div class="split" id="split"></div>
+    <div class="legend" id="split-l"></div>
+  </section>
+
+  <section class="box">
+    <h2>Per hari: pemasukan vs pengeluaran</h2>
+    <div id="chart"></div>
+  </section>
+
+  <section class="two">
+    <div class="box"><h2>Menu terlaris (jumlah terjual)</h2><div id="menu"></div></div>
+    <div class="box"><h2>Pengeluaran per toko</h2><div id="toko"></div></div>
+  </section>
+
+  <section class="box"><h2>Perlu diperhatikan</h2><div id="perhatian"></div></section>
+
+  <section class="box"><h2>Rincian harian</h2><div class="wrap"><table id="tabel"></table></div>
+    <p><small class="mut">* = QRIS/Online masih angka kertas, belum dicocokkan dengan data bank/merchant. Pengeluaran = belanja di lembar + laporan pengeluaran.</small></p></div>
+</main>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const rp = n => 'Rp' + new Intl.NumberFormat('id-ID').format(Math.round(n || 0));
+  const jt = n => { n = n || 0; const a = Math.abs(n);
+    return a >= 1e6 ? (n/1e6).toFixed(a >= 1e7 ? 0 : 1).replace('.', ',') + ' jt' : a >= 1e3 ? Math.round(n/1e3) + ' rb' : String(n); };
+  const bulanNama = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const NS = 'http://www.w3.org/2000/svg';
+  const sv = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+
+  const wibNow = new Date(Date.now() + 7*3600*1000);
+  let ym = wibNow.getUTCFullYear() + '-' + String(wibNow.getUTCMonth()+1).padStart(2,'0');
+  const bln = $('bulan'); bln.value = ym;
+
+  function range(v){
+    const [y, m] = v.split('-').map(Number);
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return { from: v + '-01', to: v + '-' + String(last).padStart(2,'0') };
+  }
+  function shift(d){ const [y, m] = bln.value.split('-').map(Number); const t = new Date(Date.UTC(y, m-1+d, 1));
+    bln.value = t.getUTCFullYear() + '-' + String(t.getUTCMonth()+1).padStart(2,'0'); load(); }
+  $('prev').onclick = () => shift(-1); $('next').onclick = () => shift(1); bln.onchange = load;
+
+  function bars(host, rows, color, fmt){
+    host.replaceChildren();
+    if (!rows.length) { host.appendChild(el('div', 'empty', 'Belum ada data.')); return; }
+    const max = Math.max(...rows.map(r => r.v), 1);
+    rows.forEach(r => {
+      const row = el('div', 'bar'); row.appendChild(el('div', 'n', r.n)).title = r.n;
+      const t = el('div', 't'); const i = el('i'); i.style.width = Math.max(2, r.v / max * 100) + '%'; i.style.background = color; t.appendChild(i);
+      row.appendChild(t); row.appendChild(el('div', 'a', fmt(r))); host.appendChild(row);
+    });
+  }
+
+  function chart(days){
+    const host = $('chart'); host.replaceChildren();
+    if (!days.length) { host.appendChild(el('div', 'empty', 'Belum ada data bulan ini.')); return; }
+    const W = Math.max(1000, days.length * 34 + 60), H = 230, pl = 44, pb = 26, pt = 10;
+    const max = Math.max(...days.map(d => Math.max(d.pemasukan, d.pengeluaran)), 1);
+    const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', style: 'max-height:260px' });
+    for (let k = 0; k <= 4; k++) {
+      const y = pt + (H - pt - pb) * (1 - k/4);
+      svg.appendChild(sv('line', { x1: pl, x2: W - 6, y1: y, y2: y, stroke: '#222c52' }));
+      const tx = sv('text', { x: pl - 6, y: y + 4, 'text-anchor': 'end' }); tx.textContent = jt(max * k / 4); svg.appendChild(tx);
+    }
+    const step = (W - pl - 6) / days.length, bw = Math.min(12, step / 2.6);
+    days.forEach((d, i) => {
+      const cx = pl + step * i + step / 2;
+      [[d.pemasukan, '#22c55e', -bw - 1], [d.pengeluaran, '#f87171', 1]].forEach(([v, c, dx]) => {
+        const h = (H - pt - pb) * v / max;
+        const r = sv('rect', { x: cx + dx, y: H - pb - h, width: bw, height: Math.max(h, v > 0 ? 1 : 0), rx: 2, fill: c });
+        const t = sv('title', {}); t.textContent = d.tanggal.slice(8) + '/' + d.tanggal.slice(5, 7) + ' · ' + (c === '#22c55e' ? 'Pemasukan ' : 'Pengeluaran ') + rp(v); r.appendChild(t); svg.appendChild(r);
+      });
+      const tx = sv('text', { x: cx, y: H - 8, 'text-anchor': 'middle' }); tx.textContent = String(Number(d.tanggal.slice(8))); svg.appendChild(tx);
+    });
+    const wrap = el('div'); wrap.style.overflowX = 'auto'; wrap.appendChild(svg); host.appendChild(wrap);
+    const lg = el('div', 'legend');
+    [['#22c55e', 'Pemasukan'], ['#f87171', 'Pengeluaran']].forEach(([c, n]) => { const s = el('span'); const d = el('i', 'dot'); d.style.background = c; s.appendChild(d); s.appendChild(document.createTextNode(n)); lg.appendChild(s); });
+    host.appendChild(lg);
+  }
+
+  function render(d){
+    const t = d.total, days = d.harian || [];
+    $('k-in').textContent = rp(t.pemasukan); $('k-in-s').textContent = t.hari + ' hari tercatat';
+    $('k-out').textContent = rp(t.pengeluaran); $('k-out-s').textContent = 'belanja lembar ' + rp(t.belanja_lembar) + ' · laporan ' + rp(t.laporan);
+    const net = t.pemasukan - t.pengeluaran; const kn = $('k-net'); kn.textContent = rp(net); kn.className = 'v ' + (net >= 0 ? 'in' : 'out');
+    $('k-avg').textContent = t.hari ? rp(t.pemasukan / t.hari) : '–'; $('k-avg-s').textContent = 'pemasukan per hari jualan';
+
+    const sp = $('split'), sl = $('split-l'); sp.replaceChildren(); sl.replaceChildren();
+    [['Cash', t.cash, 'var(--cash)'], ['QRIS', t.qris, 'var(--qris)'], ['Online', t.online, 'var(--online)']].forEach(([n, v, c]) => {
+      const pct = t.pemasukan > 0 ? v / t.pemasukan * 100 : 0;
+      const i = el('i'); i.style.width = pct + '%'; i.style.background = c; sp.appendChild(i);
+      const s = el('span'); const dd = el('i', 'dot'); dd.style.background = c; s.appendChild(dd);
+      s.appendChild(document.createTextNode(n + ' ')); s.appendChild(el('b', null, rp(v) + ' (' + pct.toFixed(0) + '%)')); sl.appendChild(s);
+    });
+
+    chart(days);
+    bars($('menu'), (d.menu || []).map(m => ({ n: m.nama, v: m.qty, o: m.omzet })), '#38bdf8', r => r.v + 'x · ' + jt(r.o));
+    bars($('toko'), (d.toko || []).map(m => ({ n: m.nama, v: m.total })), '#f87171', r => rp(r.v));
+
+    const p = d.perhatian || {}, ph = $('perhatian'); ph.replaceChildren(); let any = false;
+    const note = (txt, b) => { any = true; const n = el('div', 'note'); n.appendChild(document.createTextNode(txt + ' ')); n.appendChild(el('b', null, b)); ph.appendChild(n); };
+    if (p.tanpa_foto > 0) note('Pengeluaran tanpa foto nota:', p.tanpa_foto + ' catatan');
+    if (p.qris_belum_cair > 0) note('Hari dengan QRIS yang masih angka kertas (belum ada pencairan bank):', p.qris_belum_cair + ' hari');
+    if (p.potongan_online) note('Potongan online (kertas − merchant):', rp(p.potongan_online));
+    if (p.pisah_modal) note('Total uang dipisah ke plastik (Pisah Modal):', rp(p.pisah_modal));
+    if (!any) ph.appendChild(el('div', 'empty', 'Tidak ada yang perlu diperhatikan.'));
+
+    const tb = $('tabel'); tb.replaceChildren();
+    const hd = el('tr'); ['Tanggal', 'Cash', 'QRIS', 'Online', 'Pemasukan', 'Pengeluaran'].forEach(h => hd.appendChild(el('th', null, h))); tb.appendChild(hd);
+    days.slice().reverse().forEach(x => {
+      const tr = el('tr');
+      [x.tanggal.slice(8) + '/' + x.tanggal.slice(5, 7), rp(x.cash), rp(x.qris) + (x.qris_status === 'sementara' ? '*' : ''),
+       rp(x.online) + (x.online_status === 'sementara' ? '*' : ''), rp(x.pemasukan), rp(x.pengeluaran)].forEach(c => tr.appendChild(el('td', null, c)));
+      tb.appendChild(tr);
+    });
+  }
+
+  async function load(){
+    const e = $('err'); e.style.display = 'none';
+    try {
+      const r = await fetch('/api/akuntan-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(range(bln.value)) });
+      if (!r.ok) throw new Error('Server menjawab ' + r.status + (r.status === 404 ? ' (workflow n8n belum aktif)' : ''));
+      const d = await r.json(); if (!d || !d.total) throw new Error('Data tidak lengkap');
+      render(d);
+    } catch (x) { e.textContent = 'Gagal memuat laporan: ' + x.message; e.style.display = 'block'; }
+  }
+  load();
+})();
+</script>
+</body>
+</html>

@@ -29,6 +29,11 @@
 		rewrite * /webhook/ctl-agent-profile
 		reverse_proxy n8n:5678
 	}
+	@akuntan path /api/akuntan-data
+	handle @akuntan {
+		rewrite * /webhook/ctl-akuntan-data
+		reverse_proxy n8n:5678
+	}
 	handle {
 		reverse_proxy dashboard:80
 	}
