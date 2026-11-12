@@ -969,7 +969,7 @@ create table if not exists public.akun_staff (
 alter table public.akun_staff enable row level security;
 insert into public.akun_staff (id, name, aliases, position) values
   ('zhafran', 'Zhafran', '{"zafran","jafran","zhafran"}', 1),
-  ('rafi',    'Rafi',    '{"rapi","rafy"}', 2),
+  ('rafi',    'Rafi',    '{"rapi","rafy","raffi","kafi","koa","kari"}', 2),   -- koa/kafi/kari = tulisan tangannya sering terbaca begitu
   ('erico',   'Erico',   '{"eriko","erico"}', 3),
   ('habib',   'Habib',   '{"abib"}', 4),
   ('farhan',  'Farhan',  '{"farhan"}', 5)
