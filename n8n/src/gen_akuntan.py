@@ -57,7 +57,7 @@ nodes = [
    "sendHeaders": True, "specifyHeaders": "json",
    "jsonHeaders": "={{ JSON.stringify($json.vision_provider === 'gemini' ? { 'x-goog-api-key': $env.GEMINI_API_KEY, 'content-type': 'application/json' } : { 'x-api-key': $env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }) }}",
    "sendBody": True, "specifyBody": "json", "jsonBody": "={{ JSON.stringify($json.vision_body) }}",
-   "options": {"timeout": 120000}}, onError="continueRegularOutput"),
+   "options": {"timeout": 120000}}, onError="continueRegularOutput", retryOnFail=True, maxTries=4, waitBetweenTries=5000),
  code("Olah hasil", [1200, 0], "olah.js"),
  http("Catat (RPC akun_handle)", [1440, 0], "={{ $env.SUPABASE_URL }}/rest/v1/rpc/akun_handle", "={{ JSON.stringify({ p: $json.p }) }}", supabase=True),
  code("Susun balasan", [1680, 0], "balasan.js"),

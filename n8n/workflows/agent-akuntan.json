@@ -121,7 +121,10 @@
           "timeout": 120000
         }
       },
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000
     },
     {
       "id": "94d6eb7a-2136-5c8d-b21b-08690a45bdf2",
