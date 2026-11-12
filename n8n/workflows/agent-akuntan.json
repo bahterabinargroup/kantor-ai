@@ -110,7 +110,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $json.vision_provider === 'gemini' ? ($env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\\/+$/, '') + '/v1beta/models/' + ($env.AKUNTAN_GEMINI_MODEL || 'gemini-2.5-flash') + ':generateContent' : ($env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\\/+$/, '') + '/v1/messages' }}",
+        "url": "={{ $json.vision_provider === 'gemini' ? ($env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\\/+$/, '') + '/v1beta/models/' + ($env.AKUNTAN_GEMINI_MODEL || 'gemini-3.8-flash') + ':generateContent' : ($env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\\/+$/, '') + '/v1/messages' }}",
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($json.vision_provider === 'gemini' ? { 'x-goog-api-key': $env.GEMINI_API_KEY, 'content-type': 'application/json' } : { 'x-api-key': $env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }) }}",
