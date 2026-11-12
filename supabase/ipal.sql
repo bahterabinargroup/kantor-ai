@@ -369,8 +369,8 @@ begin
   )
   select array_agg(
            case when p.kitchen_id is not null
-                then 'ℹ️ ' || k.name || ' sudah lapor hari ini. ' || a.n || ' foto/video tambahan dicatat.'
-                else '✅ Laporan IPAL ' || k.name || ' tercatat (' || a.n || ' foto/video).' end
+                then 'ℹ️ ' || k.name || ' sudah lapor hari ini. Foto/video tambahan dicatat.'
+                else '✅ Laporan IPAL ' || k.name || ' tercatat.' end
            order by k.position)
     into v_lines
     from agg a join public.ipal_kitchens k on k.id = a.kitchen_id
