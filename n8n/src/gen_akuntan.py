@@ -53,7 +53,7 @@ nodes = [
      "conditions": [{"id": nid("pbf-c"), "leftValue": "={{ $json.need_vision }}", "rightValue": "",
        "operator": {"type": "boolean", "operation": "true", "singleValue": True}}], "combinator": "and"}, "options": {}}),
  node("Baca foto (Claude)", "n8n-nodes-base.httpRequest", 4.2, [960, -80], {
-   "method": "POST", "url": "https://api.anthropic.com/v1/messages",
+   "method": "POST", "url": "={{ ($env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\\/+$/, '') + '/v1/messages' }}",
    "sendHeaders": True, "specifyHeaders": "json",
    "jsonHeaders": "={{ JSON.stringify({ 'x-api-key': $env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }) }}",
    "sendBody": True, "specifyBody": "json", "jsonBody": "={{ JSON.stringify($json.vision_body) }}",
