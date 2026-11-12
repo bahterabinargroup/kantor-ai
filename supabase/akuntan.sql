@@ -2,18 +2,18 @@
 -- Agen Akuntan — Berdikari Koffee (jalankan SETELAH schema.sql & ipal.sql, aman diulang)
 -- ═══════════════════════════════════════════════════════════════════
 -- Dua jenis laporan di grup "BERDIKARI - LAPORAN HARIAN":
---   1) Foto lembar penjualan harian (tally per menu, Cash/QRIS/Online, 2 shift, kotak belanja)
+--   1) Foto lembar penjualan harian (garis per menu, Cash/QRIS/Online, 2 shift, kotak belanja)
 --   2) Laporan pengeluaran (teks berformat "LAPORAN PENGELUARAN BERDIKARI KOFFEE" + foto nota/barang)
 -- Semua dicatat apa adanya, tanpa kategori. Pintu masuk tunggal: akun_handle(jsonb).
 -- Disesuaikan dengan buku Balqis (sheet "PIC: BALQIS | LAPORAN BERDIKARI KOFFEE"):
---   Penjualan Cash/hari = cash akhir − modal + belanja harian        (bukan dari tally)
+--   Penjualan Cash/hari = cash akhir − modal + belanja harian        (bukan dari garis)
 --   Penjualan QRIS/hari = kertas dulu (sementara); setelah pencairan bank BNI masuk (berkala), angka bank yang dipakai
 --     (tanggal real QRIS = hari sebelum tanggal masuk; di buku Balqis kolom QRIS = BNI, cocok 327/327 hari)
 --   Penjualan Online/hari = Σ Shopee + GoFood + Grab dari aplikasi merchant (paling nyata); kertas tetap dicatat → potongan = kertas − merchant
 --   Event/Catering = uang masuk di mutasi bank
 -- Cek otomatis (hanya memberi tanda, tidak menolak):
---   QRIS   = Σ tally QRIS × harga menu            vs QRIS tertulis
---   Cash   = modal + Σ tally Cash × harga − belanja   vs Cash Akhir shift terakhir
+--   QRIS   = Σ garis QRIS × harga menu            vs QRIS tertulis
+--   Cash   = modal + Σ garis Cash × harga − belanja   vs Cash Akhir shift terakhir
 --
 -- Privasi: SEMUA tabel akun_* tertutup untuk dashboard (tanpa policy). Nominal tidak boleh masuk
 -- agent_events — agen ini diberi config.redact_events agar log "pesan masuk" tidak memuat isi pesan.
@@ -98,12 +98,12 @@ create table if not exists public.akun_pending_media (
 -- ── Penyesuaian ke buku Balqis (kolom tambahan; aman diulang) ───────
 alter table public.akun_menu    add column if not exists menu_group text;   -- grup di sheet HPP: COFFEE N' MILK, MANUAL BREW, …
 alter table public.akun_menu    add column if not exists hpp int;           -- HPP per porsi (varian Ice bila ada Ice/Hot)
-alter table public.akun_sheets  add column if not exists cash_sales    int;  -- Σ tally Cash × harga
-alter table public.akun_sheets  add column if not exists qris_sales    int;  -- Σ tally QRIS × harga
-alter table public.akun_sheets  add column if not exists online_sales  int;  -- Σ tally Online × harga (kotor)
+alter table public.akun_sheets  add column if not exists cash_sales    int;  -- Σ garis Cash × harga
+alter table public.akun_sheets  add column if not exists qris_sales    int;  -- Σ garis QRIS × harga
+alter table public.akun_sheets  add column if not exists online_sales  int;  -- Σ garis Online × harga (kotor)
 alter table public.akun_sheets  add column if not exists belanja       int;  -- Σ kotak "Pengeluaran belanja" (= Belanja Harian)
 alter table public.akun_sheets  add column if not exists qris_written  int;  -- QRIS yang ditulis barista (Σ shift)
-alter table public.akun_sheets  add column if not exists cash_expected int;  -- modal + tally tunai − belanja
+alter table public.akun_sheets  add column if not exists cash_expected int;  -- modal + garis tunai − belanja
 alter table public.akun_sheets  add column if not exists cash_revenue  int;  -- cash akhir − modal + belanja  → "Penjualan Cash" di laba-rugi
 alter table public.akun_sheets  add column if not exists plastik_in    int not null default 0;  -- uang plastik yang dipinjam ke kasir untuk kembalian (bukan belanja)
 alter table public.akun_sheets  add column if not exists cash_variance int;  -- cash akhir − cash_expected (= "petty cash harian" di arus kas)
@@ -228,10 +228,10 @@ on conflict (id) do update
       menu_group = excluded.menu_group,
       price = coalesce(public.akun_menu.price, excluded.price),   -- harga yang sudah kamu ubah tidak ditimpa
       hpp   = coalesce(public.akun_menu.hpp, excluded.hpp);
--- "Teh" tanpa harga digabung ke "Air Mineral/Es Teh" (Rp3.000 di sheet tally)
+-- "Teh" tanpa harga digabung ke "Air Mineral/Es Teh" (Rp3.000 di sheet garis)
 update public.akun_sales set menu_id = 'air_mineral' where menu_id = 'teh';
 delete from public.akun_menu where id = 'teh';
--- Rokok Signature: angka di kolom tally = RUPIAH (bukan jumlah batang), jadi harga satuan = 1.
+-- Rokok Signature: angka di kolom garis = RUPIAH (bukan jumlah batang), jadi harga satuan = 1.
 
 -- ── Referensi dari buku Balqis: toko langganan & peta sub-kategori → laba-rugi ──
 insert into public.akun_vendors (name, aliases) values
@@ -496,7 +496,7 @@ begin
       on conflict (income_date, merchant) do update set amount = excluded.amount;
       v_n := v_n + 1;
     end loop;
-    -- potongan = tally online di kertas (kotor) − pendapatan merchant, hanya untuk hari yang punya keduanya
+    -- potongan = garis online di kertas (kotor) − pendapatan merchant, hanya untuk hari yang punya keduanya
     select coalesce(sum(s2.online_sales),0), coalesce(sum(o.tot),0) into v_tot_k, v_tot_m
       from public.akun_sheets s2
       join (select income_date, sum(amount) tot from public.akun_online_income group by 1) o on o.income_date = s2.sheet_date
@@ -616,7 +616,7 @@ begin
     elsif round(v_qris) = v_qris_written then
       v_check := array_append(v_check, ('QRIS cocok ✓')::text);
     else
-      v_check := array_append(v_check, (('⚠️ QRIS tertulis ' || public.akun_rp(v_qris_written) || ', hitungan dari tally ' || public.akun_rp(v_qris)))::text);
+      v_check := array_append(v_check, (('⚠️ QRIS tertulis ' || public.akun_rp(v_qris_written) || ', hitungan dari garis di lembar ' || public.akun_rp(v_qris)))::text);
       v_flags := v_flags || to_jsonb('selisih QRIS ' || public.akun_rp(v_qris_written - v_qris));
     end if;
     -- cek Cash: modal + penjualan tunai − belanja = cash akhir shift terakhir
@@ -907,8 +907,8 @@ alter table public.akun_sheets  add column if not exists pisah_modal int generat
 
 -- ── Laporan harian seperti sheet "LAPORAN HARIAN" (hanya service_role; tertutup untuk dashboard) ──
 -- qris  : pencairan bank bila sudah ada (qris_status='final'), kalau belum angka kertas ('sementara').
--- online: pendapatan merchant bila sudah ada ('final'), kalau belum angka tally kertas ('sementara').
--- crosscheck_qris = QRIS kertas − bank (0 = cocok). potongan_online = tally kertas (kotor) − merchant.
+-- online: pendapatan merchant bila sudah ada ('final'), kalau belum angka garis kertas ('sementara').
+-- crosscheck_qris = QRIS kertas − bank (0 = cocok). potongan_online = garis kertas (kotor) − merchant.
 create or replace view public.akun_v_harian with (security_invoker = true) as
 with d as (
   select sheet_date as tgl from public.akun_sheets

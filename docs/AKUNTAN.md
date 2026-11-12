@@ -5,7 +5,7 @@
 Mencatat **pemasukan** (foto lembar harian) dan **pengeluaran** (teks "LAPORAN PENGELUARAN BERDIKARI KOFFEE" + foto nota) dari grup WhatsApp **BERDIKARI - LAPORAN HARIAN**. Tanpa kategori, tanpa rekap otomatis, WhatsApp saja.
 
 ## Cara kerja
-- Foto lembar harian → dibaca model Claude → tally per menu × harga → dicek: QRIS tertulis vs hitungan, dan **cash akhir shift 2 = modal + penjualan tunai − belanja** (shift 2 melanjutkan cash akhir shift 1). Yang tidak cocok ditandai di balasan.
+- Foto lembar harian → dibaca model Claude → garis per menu × harga → dicek: QRIS tertulis vs hitungan, dan **cash akhir shift 2 = modal + penjualan tunai − belanja** (shift 2 melanjutkan cash akhir shift 1). Yang tidak cocok ditandai di balasan.
 - Teks laporan pengeluaran + foto nota/barang dari pengirim yang sama (≤20 menit, urutan bebas) digabung jadi satu catatan.
 - **Bukti bayar** (foto struk token listrik, transfer, wifi, dll.) tanpa teks laporan dicatat otomatis sebagai pengeluaran (tanggal dari bukti, tanpa kategori). Kalau laporan teks dengan nominal & tanggal sama masuk sebelum/sesudahnya, keduanya digabung, tidak dobel.
 - Foto tidak terbaca → bot minta kirim ulang atau ketik manual.
@@ -26,12 +26,12 @@ Mencatat **pemasukan** (foto lembar harian) dan **pengeluaran** (teks "LAPORAN P
 5. Buka `supabase/akuntan-aktifkan.sql`, ganti `GANTI_JID_GRUP_BERDIKARI` dengan JID tadi, jalankan di SQL Editor (ini juga mengunci IPAL ke grup IPAL dan menyalakan Akuntan).
 6. Di `.env`: `WA_ALLOWED_CHATS` harus berisi JID IPAL **dan** JID Berdikari (pisah koma), lalu `docker compose up -d n8n`.
 7. (Opsional) Impor riwayat Des 2025–Okt 2026 dari buku Balqis: jalankan file terpisah `riwayat-import.sql` di SQL Editor (pencairan QRIS BNI, Shopee/GoFood/Grab, mutasi bank), lalu hapus file-nya.
-8. Uji dengan foto asli di grup. Semua harga menu sudah terisi dari sheet tally (Extra Shot Rp5.000, Air Mineral/Es Teh Rp3.000).
+8. Uji dengan foto asli di grup. Semua harga menu sudah terisi dari lembar harga (Extra Shot Rp5.000, Air Mineral/Es Teh Rp3.000).
 
 ## Kecocokan dengan buku Balqis
 | Di buku | Di Supabase |
 |---|---|
-| Penjualan Cash/hari = cash akhir − modal + belanja harian | `akun_sheets.cash_revenue` (selisih dengan tally tunai = `cash_variance`, setara "petty cash harian") |
+| Penjualan Cash/hari = cash akhir − modal + belanja harian | `akun_sheets.cash_revenue` (selisih dengan hitungan garis tunai = `cash_variance`, setara "petty cash harian") |
 | QRIS/hari: kertas dulu (sementara), diganti pencairan BNI saat dikirim berkala (tanggal real = hari sebelum tanggal masuk) | `akun_qris_settlements`; view `akun_v_harian` (`qris_status`), `akun_v_qris_belum_cair` |
 | Online/hari: angka merchant (nyata) dipakai; kertas tetap dicatat → potongan = kertas − merchant | `akun_online_income`; `akun_sheets.online_sales`; view `potongan_online` |
 | Event, catering, bulk order, belanja lewat bank | `akun_bank_tx` |
