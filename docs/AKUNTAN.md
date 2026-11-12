@@ -10,6 +10,10 @@ Mencatat **pemasukan** (foto lembar harian) dan **pengeluaran** (teks "LAPORAN P
 - `/akuntan rekap`, `/akuntan rekap kemarin`, `/akuntan rekap 9 nov` → ringkasan satu hari (manual).
 - Foto TIDAK disimpan di server (aslinya tetap di WhatsApp; `message_id` dicatat). Nominal tidak masuk log dashboard (`redact_events`).
 
+## Arti istilah
+- **Uang plastik** = uang "Pisah Modal" (kotak kanan di lembar, mis. 200k): kelebihan kas di atas modal ±90–110 ribu, dimasukkan ke plastik dan disimpan di kasir sampai diambil PIC. Pengeluaran bertuliskan "uang plastik" diambil dari simpanan ini, bukan dari laci (`pay_source = plastik`).
+- **Uang berdi** = Cash Berdi (kas laci).
+
 ## Pasang (urut)
 1. Deploy zip: `bash ~/Downloads/deploy.sh`
 2. Isi `ANTHROPIC_API_KEY` di `.env` server (ketik sendiri di server, jangan ke chat), lalu `docker compose up -d n8n`.
