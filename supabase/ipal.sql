@@ -114,8 +114,8 @@ declare
   v_pend bigint;
 begin
   if v_id is null then
-    if v_media and not v_has_text then
-      -- foto tanpa caption → pakai nama dapur dari teks pengirim yang sama (≤20 menit, belum dipasangkan foto)
+    if v_media and not coalesce((m->>'ambiguous')::boolean, false) then
+      -- foto tanpa caption ATAU caption tanpa nama dapur (mis. "Bak IPAL setelah dibersihkan") → pakai nama dapur dari teks pengirim yang sama (≤20 menit, belum dipasangkan foto)
       select r.kitchen_id into v_id
         from public.ipal_reports r
        where r.sender = p_sender and r.chat_id = p_chat_id and r.kitchen_id is not null

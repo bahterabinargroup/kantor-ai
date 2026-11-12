@@ -3,7 +3,7 @@
   "name": "lib:send-wa",
   "nodes": [
     {
-      "id": "366a2104-7741-4c96-b875-eafb3e1f3aa9",
+      "id": "8bbc720f-3cd7-4bbc-a8e7-126d03c0abd0",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "4faf0735-8489-4d41-9874-dceafd79f236",
+      "id": "17b6798a-25c0-4c8f-9142-b614dc9e2b95",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
         0,
         0
       ],
-      "webhookId": "f37ff97f-83f1-4e38-9de3-0f9d353e2862",
+      "webhookId": "fc0504f5-7cd4-4308-b178-ed1d3b970a75",
       "parameters": {
         "httpMethod": "POST",
         "path": "lib-send-wa",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "d836d034-8c28-4875-a9fe-948d18951a18",
+      "id": "0f450900-a702-4656-a6a3-90974fe8a9d8",
       "name": "Kirim via Evolution API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,

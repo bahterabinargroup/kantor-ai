@@ -3,7 +3,7 @@
   "name": "sys:ipal-ack",
   "nodes": [
     {
-      "id": "fd3b2ff0-b9bd-4e61-bded-bd742c25daf7",
+      "id": "b62871cd-a1b5-467c-9eaa-01c9ce0edc3f",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "27766440-530c-4ad6-a902-5ecfac400b7a",
+      "id": "0a0df6e0-69e6-479e-872a-abe8e9d8bbff",
       "name": "Tiap menit",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -39,7 +39,7 @@
       }
     },
     {
-      "id": "c17fe6ed-0b03-432d-8151-6c80b596d5f8",
+      "id": "5697af7e-d842-4dee-b916-3a76e68fc248",
       "name": "Cek konfirmasi (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -60,7 +60,7 @@
       }
     },
     {
-      "id": "f95451a7-0a4a-4f46-86e4-11e8ac2ab9f5",
+      "id": "45168a5c-6f5c-4d3d-96f2-1d0d3d2cf2bf",
       "name": "Ada konfirmasi?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -77,7 +77,7 @@
           },
           "conditions": [
             {
-              "id": "a7504c35-5ab0-475a-830c-9c5acffb3225",
+              "id": "72d2feb5-dc7d-498b-ac60-24cab3485945",
               "leftValue": "={{ $json.reply }}",
               "rightValue": "",
               "operator": {
@@ -93,7 +93,7 @@
       }
     },
     {
-      "id": "a82e6e7e-2f5f-4ced-aa8d-fe16cfa16a2c",
+      "id": "701f96b8-8133-4b8a-8fd2-fbe8cea7b9e2",
       "name": "Kirim konfirmasi",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,

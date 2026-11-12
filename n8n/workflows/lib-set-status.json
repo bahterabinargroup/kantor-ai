@@ -3,7 +3,7 @@
   "name": "lib:set-status",
   "nodes": [
     {
-      "id": "55e9e3f7-7640-4023-a078-6044e454d694",
+      "id": "8d11247a-b9f2-405c-bb5e-006b9af95f9b",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "b33522e4-8a5d-467f-a2f4-f03d575efe00",
+      "id": "6761fbf5-52b8-4451-b17e-2466a4d9c714",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
         0,
         0
       ],
-      "webhookId": "eeeccf8a-efd6-4994-a135-90c869f0c8d0",
+      "webhookId": "2553c86d-68d4-4f77-bd27-407f47670a67",
       "parameters": {
         "httpMethod": "POST",
         "path": "lib-set-status",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "57b6630d-1c7e-4dd8-ae25-247255ecdfec",
+      "id": "f78ec075-c660-459c-bad6-c11865011bc4",
       "name": "Set status (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,

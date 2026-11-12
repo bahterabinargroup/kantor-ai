@@ -3,7 +3,7 @@
   "name": "sys:wa-watchdog",
   "nodes": [
     {
-      "id": "d9b43c72-ddc6-422a-a206-9b63f45201dd",
+      "id": "a606e0a0-c2b7-42be-906e-1d9fd5c2f995",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "3d82732e-5d3b-4b07-b551-00e14deb233c",
+      "id": "3c910734-46ce-48e8-aa5b-adb997bc06ab",
       "name": "Tiap 5 menit",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -39,7 +39,7 @@
       }
     },
     {
-      "id": "95d97267-144e-42a9-b7a2-65df775b8e50",
+      "id": "d7ce389d-30eb-436b-bcf6-f71c58c7f617",
       "name": "Cek webhook",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -65,7 +65,7 @@
       }
     },
     {
-      "id": "45dadfda-8f1f-4be5-9958-da5bb2959216",
+      "id": "55b13075-1772-4e27-b3df-51825c38ee47",
       "name": "Webhook terpasang?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -82,7 +82,7 @@
           },
           "conditions": [
             {
-              "id": "471a63f5-138a-4e31-94cd-1e56552e9faa",
+              "id": "3d786065-d8ca-4be6-81f2-d89553a3c96b",
               "leftValue": "={{ $json.url }}",
               "rightValue": "",
               "operator": {
@@ -98,7 +98,7 @@
       }
     },
     {
-      "id": "7bdd2cfd-6c9a-419a-8035-c9216227b9ff",
+      "id": "54fb977f-d4bb-4b0a-804d-c61fa36e119c",
       "name": "Pasang ulang webhook",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,

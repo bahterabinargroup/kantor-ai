@@ -3,7 +3,7 @@
   "name": "sys:ipal-reminder",
   "nodes": [
     {
-      "id": "7328d2eb-6c0b-4418-a007-9204286f20f8",
+      "id": "7332bd5d-3cc8-41d3-b57f-33395d104440",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "15acbe61-e485-434a-9224-380e60f1c17c",
+      "id": "b6ddba15-65bf-4cb9-bca9-61c40e7c88b3",
       "name": "17:00 WIB",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -39,7 +39,7 @@
       }
     },
     {
-      "id": "a7bdf8b4-d6ce-4824-80ec-e8cc3133d937",
+      "id": "6a55755f-4c0b-4d89-8a8b-675a4eb76478",
       "name": "06:00 WIB",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -59,7 +59,7 @@
       }
     },
     {
-      "id": "2d40b69a-baa6-45dd-8b41-8b05d5b44e39",
+      "id": "0df71426-4906-4ce7-8aa8-7b01831c00a3",
       "name": "Belum lapor hari ini (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -80,7 +80,7 @@
       }
     },
     {
-      "id": "1431c804-bbf3-4e2d-be97-411cd97a488b",
+      "id": "5153b251-0545-47b5-80bc-78836b692848",
       "name": "Belum lapor kemarin (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -101,7 +101,7 @@
       }
     },
     {
-      "id": "4d460752-7469-42fc-8369-6b061d64511c",
+      "id": "085c28ef-2787-40cc-b69e-304d76e94a18",
       "name": "Ada yang belum?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -118,7 +118,7 @@
           },
           "conditions": [
             {
-              "id": "277ae671-f189-41eb-a0f7-824c12aae992",
+              "id": "80e7aec9-f162-4eb8-9858-55444f549863",
               "leftValue": "={{ $json.reply }}",
               "rightValue": "",
               "operator": {
@@ -134,7 +134,7 @@
       }
     },
     {
-      "id": "ed234990-79f9-4f7a-ae0d-3472ec3f95fa",
+      "id": "4ed6707b-a373-434b-9bc5-3dd4f08d62c4",
       "name": "Kirim pengingat",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,

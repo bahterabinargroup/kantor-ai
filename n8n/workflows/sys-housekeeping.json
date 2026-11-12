@@ -3,7 +3,7 @@
   "name": "sys:housekeeping",
   "nodes": [
     {
-      "id": "4e30a41e-38b6-4ee7-bcba-0bb7a3d1225f",
+      "id": "5a376bb4-cde1-49a6-804b-1cb336d4c2a7",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "ac4e9e60-6853-4b2c-a463-800fa2ebbdf6",
+      "id": "dbc8624c-7379-4758-8e00-6daa6d07ea24",
       "name": "Tiap 10 menit",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -39,7 +39,7 @@
       }
     },
     {
-      "id": "ef24b4d1-9c36-48fc-b886-fde13e085e76",
+      "id": "a788c948-550c-423b-bb4b-cca4a3b511e2",
       "name": "Housekeeping (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,

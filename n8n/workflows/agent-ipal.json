@@ -3,7 +3,7 @@
   "name": "agent:ipal",
   "nodes": [
     {
-      "id": "c8b6a3d7-d235-49bc-bb9a-65ce2f68bdef",
+      "id": "c8db4c18-c421-4d14-93ae-c18329394a00",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "30672112-88c1-4deb-87e1-0550a8ad0751",
+      "id": "0c5624f9-fe61-4f9f-bb36-4987962fe1fe",
       "name": "Webhook agen",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
         0,
         0
       ],
-      "webhookId": "144b95fb-be75-469f-95d5-6c888f5914e1",
+      "webhookId": "3c9bff49-ffe1-44d2-b855-1fd99c77160e",
       "parameters": {
         "httpMethod": "POST",
         "path": "agent-ipal",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "31fdaa71-8011-4bcc-8801-d99ed8dab804",
+      "id": "32c4b693-57ee-4795-aefd-a60d1cd6b0e0",
       "name": "Status: kerja",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -54,7 +54,7 @@
       }
     },
     {
-      "id": "9570fd46-43b2-47d1-8d7c-bdcb7b535553",
+      "id": "6f22ca3e-1f61-4b1d-a6f2-1c6aa2f65978",
       "name": "Siapkan data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -64,11 +64,11 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Obrolan biasa bukan laporan: teks tanpa foto yang me-mention/membalas orang atau lebih dari 6 kata diabaikan.\nconst p = $('Webhook agen').first().json.body;\nconst media = !!(p.mimetype && /^(image|video)\\//.test(p.mimetype)) || /^(image|video)Message$/.test(p.message_type || '');\nconst raw = String(p.raw_text || '').trim();\nconst words = raw.split(/\\s+/).filter(Boolean).length;\nconst chatter = !media && (p.has_mention || p.is_reply || words > 6);\nreturn [{ json: { p_message_id: p.message_id, p_chat_id: p.chat_id, p_text: chatter ? '' : raw,\n                  p_has_media: media, p_sender: p.sender } }];\n"
+        "jsCode": "// Obrolan biasa bukan laporan: teks tanpa foto yang me-mention/membalas orang atau lebih dari 40 kata diabaikan.\nconst p = $('Webhook agen').first().json.body;\nconst media = !!(p.mimetype && /^(image|video)\\//.test(p.mimetype)) || /^(image|video)Message$/.test(p.message_type || '');\nconst raw = String(p.raw_text || '').trim();\nconst words = raw.split(/\\s+/).filter(Boolean).length;\nconst chatter = !media && (p.has_mention || p.is_reply || words > 40);\nreturn [{ json: { p_message_id: p.message_id, p_chat_id: p.chat_id, p_text: chatter ? '' : raw,\n                  p_has_media: media, p_sender: p.sender } }];\n"
       }
     },
     {
-      "id": "8bdef92d-87a0-437c-a94e-65c7a5c6380c",
+      "id": "a9dee09d-2198-4cd6-9122-efebc4bdb375",
       "name": "Catat laporan (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -89,7 +89,7 @@
       }
     },
     {
-      "id": "3280587a-18c3-47a6-ac5d-2789ec8f87d6",
+      "id": "99e7ab15-16d9-4e1b-acb1-12ae921de935",
       "name": "Susun balasan",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -103,7 +103,7 @@
       }
     },
     {
-      "id": "0342ff3c-ce8a-448d-96c6-85d3a8ab2039",
+      "id": "212ed6f2-7dc3-4130-9508-22a3e8225371",
       "name": "Ada balasan?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -120,7 +120,7 @@
           },
           "conditions": [
             {
-              "id": "fc75c595-690e-4e60-8da7-543af4a0302c",
+              "id": "c121c936-a6fb-48cf-b8ba-6676af13995c",
               "leftValue": "={{ $json.reply }}",
               "rightValue": "",
               "operator": {
@@ -136,7 +136,7 @@
       }
     },
     {
-      "id": "f90c87e4-d74b-45f2-afd9-f5698b197659",
+      "id": "f6fa17ef-6cfb-458d-9540-958552fd89a0",
       "name": "Balas ke grup",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -154,7 +154,7 @@
       }
     },
     {
-      "id": "232966a8-fe2c-4f0b-9f4f-d314429300b0",
+      "id": "a3365770-9771-4595-b679-8c97771bbeb6",
       "name": "Tutup tugas",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -175,7 +175,7 @@
       }
     },
     {
-      "id": "688afeff-aafa-4b1d-91a1-0d8491b4a180",
+      "id": "94bb115b-1e51-426b-8006-6c10968191e0",
       "name": "Status: santai",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
