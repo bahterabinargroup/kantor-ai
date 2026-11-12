@@ -909,7 +909,8 @@ alter table public.akun_sheets  add column if not exists pisah_modal int generat
 -- qris  : pencairan bank bila sudah ada (qris_status='final'), kalau belum angka kertas ('sementara').
 -- online: pendapatan merchant bila sudah ada ('final'), kalau belum angka garis kertas ('sementara').
 -- crosscheck_qris = QRIS kertas − bank (0 = cocok). potongan_online = garis kertas (kotor) − merchant.
-create or replace view public.akun_v_harian with (security_invoker = true) as
+drop view if exists public.akun_v_harian;   -- nama kolom berubah (kolom cash lama diganti cash_garis), view tidak bisa diganti di tempat
+create view public.akun_v_harian with (security_invoker = true) as
 with d as (
   select sheet_date as tgl from public.akun_sheets
   union select real_date from public.akun_qris_settlements
@@ -924,7 +925,7 @@ with d as (
    o as (select income_date as tgl, sum(amount)::int as merchant from public.akun_online_income group by 1)
 select d.tgl as tanggal,
        sh.cash_akhir, sh.modal, sh.pic,
-       s.belanja as belanja_harian, s.cash_revenue, s.cash_sales as cash_tally, s.cash_variance,
+       s.belanja as belanja_harian, s.cash_revenue, s.cash_sales as cash_garis, s.cash_variance,
        coalesce(q.bank, s.qris_written)                      as qris,
        case when q.bank is not null then 'final' when s.qris_written is not null then 'sementara' end as qris_status,
        s.qris_written                                        as qris_kertas,
