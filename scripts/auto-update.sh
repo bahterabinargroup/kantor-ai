@@ -11,7 +11,7 @@ LOCAL=$(git rev-parse HEAD); REMOTE=$(git rev-parse origin/main)
 {
   echo "=== $(date '+%F %T') $LOCAL -> $REMOTE"
   git reset -q --hard origin/main
-  rsync -a --delete --exclude '.env' --exclude '.git' --exclude 'data/' "$REPO"/ "$APP"/
+  rsync -a --exclude '.env' --exclude '.git' --exclude 'data/' "$REPO"/ "$APP"/
   cd "$APP"
   bash scripts/import-workflows.sh
   docker compose up -d --build dashboard

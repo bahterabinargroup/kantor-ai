@@ -22,5 +22,5 @@ command -v rsync >/dev/null || sudo apt-get install -y -qq rsync
 chmod +x ~/kantor-ai/scripts/auto-update.sh 2>/dev/null || true
 cp ~/kantor-ai-repo/scripts/auto-update.sh ~/auto-update.sh 2>/dev/null || cp ~/kantor-ai/scripts/auto-update.sh ~/auto-update.sh
 chmod +x ~/auto-update.sh
-( crontab -l 2>/dev/null | grep -v auto-update.sh; echo "* * * * * $HOME/auto-update.sh" ) | crontab -
+( crontab -l 2>/dev/null | grep -v auto-update.sh || true; echo "* * * * * $HOME/auto-update.sh" ) | crontab -
 echo "SELESAI. Mulai sekarang server memperbarui diri sendiri tiap menit dari GitHub."
