@@ -1,3 +1,5 @@
+> Nama tampilan agen: **Admin Berdikari**. ID teknisnya tetap `akuntan` (perintah `/akuntan`, workflow `agent:akuntan`).
+
 # Agen Akuntan — Berdikari Koffee
 
 Mencatat **pemasukan** (foto lembar harian) dan **pengeluaran** (teks "LAPORAN PENGELUARAN BERDIKARI KOFFEE" + foto nota) dari grup WhatsApp **BERDIKARI - LAPORAN HARIAN**. Tanpa kategori, tanpa rekap otomatis, WhatsApp saja.

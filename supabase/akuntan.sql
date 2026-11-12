@@ -895,7 +895,7 @@ end $$;
 -- ── Agen Akuntan di daftar agen (MATI sampai dibatasi ke grupnya — lihat akuntan-aktifkan.sql) ──
 -- Tidak menimpa config/enabled bila baris sudah ada.
 insert into public.agents (id, name, role, emoji, color, triggers, priority, enabled, desk, config)
-values ('akuntan', 'Akuntan', 'Lembar penjualan & pengeluaran Berdikari Koffee', '🧾', '#f59e0b',
+values ('akuntan', 'Admin Berdikari', 'Admin kafe: lembar harian, belanja, fee & bon karyawan', '🧾', '#f59e0b',
         array['@media', 'laporan pengeluaran', 'nominal pengeluaran', 'koreksi'],
         8, false, '{"x":-2,"z":0}', '{"redact_events": true}')
 on conflict (id) do update
