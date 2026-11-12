@@ -65,3 +65,17 @@ Kalau bot salah baca daftar belanja di lembar, ketik di grup (satu pesan):
 
 Rokok Eceran, Rokok Signature, dan Air Mineral/Es Teh punya kategori `eceran`: tidak ikut "Menu terlaris",
 tampil di kartu **Barang eceran** di halaman laporan.
+
+
+## Karyawan, fee, dan bon (untuk potong gaji)
+
+Daftar barista ada di tabel `akun_staff` (Zhafran, Rafi, Erico, Habib, Farhan; ejaan lain di kolom `aliases`).
+Setiap baris belanja yang menulis `fee <nama>` atau `bon/kasbon <nama>` ditandai otomatis
+(`akun_expenses.staff`, `staff_kind` = `fee_shift` | `bon` | `lain`), dari lembar maupun laporan teks.
+
+Untuk agen pemotong gaji (hanya `service_role`):
+- `akun_v_staff`: satu baris per catatan (tanggal, nama, jenis, nominal, item). `perlu_dicek = true` bila fee/bon tanpa nama yang dikenal.
+- `akun_v_staff_bulanan`: total per bulan per karyawan (`fee_shift`, `bon`, `lain`, `total`).
+
+Fee dan bon tetap ikut hitungan belanja lembar (uangnya memang keluar dari kasir). Agen gaji cukup membaca view di atas;
+jangan menjumlah ulang dari belanja. Nama baru: tambah baris di `akun_staff`.

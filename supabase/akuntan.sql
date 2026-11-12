@@ -436,7 +436,7 @@ declare
   v_belanja numeric; v_modal int; v_last_cash int; v_qris_written int; v_exp numeric;
   v_flags jsonb := '[]'::jsonb; v_unc text; v_unknown text; v_disc int; v_reply text;
   v_check text[] := '{}';
-  v_plastik int := 0; v_res jsonb;
+  v_plastik int := 0; v_res jsonb; v_stf text; v_stf_bad text;
   -- pengeluaran
   e jsonb; v_amount int; v_item text; v_edate date; v_total int; v_rows int; v_id bigint; v_has_media boolean := false;
   v_pend record; v_photo jsonb := p->'photo'; v_vendor text; v_pay text;
@@ -544,7 +544,7 @@ begin
       v_shift := public.akun_int(sh->'shift');
       continue when v_shift is null or v_shift not between 1 and 3;
       insert into public.akun_shifts (sheet_id, shift, barista, ink, modal, cash_akhir, qris, discount)
-      values (v_sheet, v_shift, nullif(initcap(btrim(sh->>'barista')),''), lower(nullif(btrim(sh->>'ink'),'')),
+      values (v_sheet, v_shift, coalesce(public.akun_staff_name(sh->>'barista'), nullif(initcap(btrim(sh->>'barista')),'')), lower(nullif(btrim(sh->>'ink'),'')),
               public.akun_int(sh->'modal'), public.akun_int(sh->'cash_akhir'),
               public.akun_int(sh->'qris'), public.akun_int(sh->'discount'))
       on conflict do nothing;
@@ -581,6 +581,17 @@ begin
       insert into public.akun_expenses (expense_date, item, amount, origin, sheet_id, message_id, chat_id, sender)
       values (v_date, left(btrim(ex->>'item'), 120), v_amount, 'lembar', v_sheet, v_msg, v_chat, v_sender);
     end loop;
+
+    -- fee / bon karyawan (untuk potong gaji)
+    select string_agg(coalesce(st.name, '?') || ' ' || case x.staff_kind when 'fee_shift' then 'fee' when 'bon' then 'bon' else 'lain' end
+                      || ' ' || public.akun_rp(x.amount), ' · ' order by x.id)
+      into v_stf
+      from public.akun_expenses x left join public.akun_staff st on st.id = x.staff
+     where x.sheet_id = v_sheet and x.staff_kind is not null and x.staff is not null;
+    select string_agg(x.item || ' ' || public.akun_rp(x.amount), ', ' order by x.id)
+      into v_stf_bad
+      from public.akun_expenses x
+     where x.sheet_id = v_sheet and x.staff_kind in ('fee_shift','bon') and x.staff is null;
 
     -- totals
     select coalesce(sum(qty*unit_price) filter (where channel='cash'),0),
@@ -648,7 +659,9 @@ begin
                'Penjualan: Cash ' || public.akun_rp(v_cash) || ' · QRIS ' || public.akun_rp(v_qris) ||
                ' · Online ' || public.akun_rp(v_online) || E'\n' ||
                'Belanja di lembar: ' || public.akun_rp(v_belanja) ||
-               case when v_plastik > 0 then E'\nUang plastik dipakai untuk kembalian: ' || public.akun_rp(v_plastik) || ' (bukan belanja)' else '' end;
+               case when v_plastik > 0 then E'\nUang plastik dipakai untuk kembalian: ' || public.akun_rp(v_plastik) || ' (bukan belanja)' else '' end ||
+               case when v_stf is not null then E'\nPotongan karyawan dicatat: ' || v_stf else '' end ||
+               case when v_stf_bad is not null then E'\n❓ Fee/bon tanpa nama karyawan yang dikenal: ' || v_stf_bad else '' end;
     if cardinality(v_check) > 0 then
       v_reply := v_reply || E'\n' || array_to_string(v_check, E'\n');
     end if;
@@ -942,11 +955,99 @@ select s.sheet_date as tanggal, s.qris_written as qris_kertas
 revoke all on public.akun_v_qris_belum_cair from public, anon, authenticated;
 grant select on public.akun_v_qris_belum_cair to service_role;
 
+
+-- ── Karyawan & potongan gaji (fee shift, bon) ────────────────────────
+-- Daftar barista. Setiap baris belanja yang menyebut "fee ..." atau "bon/kasbon ..." ditandai otomatis (staff, staff_kind)
+-- supaya agen lain bisa memotong gaji bulanan lewat view akun_v_staff / akun_v_staff_bulanan.
+create table if not exists public.akun_staff (
+  id       text primary key check (id ~ '^[a-z0-9_]+$'),
+  name     text not null,
+  aliases  text[] not null default '{}',      -- ejaan lain (huruf kecil)
+  position int not null default 0,
+  enabled  boolean not null default true
+);
+alter table public.akun_staff enable row level security;
+insert into public.akun_staff (id, name, aliases, position) values
+  ('zhafran', 'Zhafran', '{"zafran","jafran","zhafran"}', 1),
+  ('rafi',    'Rafi',    '{"rapi","rafy"}', 2),
+  ('erico',   'Erico',   '{"eriko","erico"}', 3),
+  ('habib',   'Habib',   '{"abib"}', 4),
+  ('farhan',  'Farhan',  '{"farhan"}', 5)
+on conflict (id) do update set name = excluded.name, aliases = excluded.aliases, position = excluded.position;
+
+alter table public.akun_expenses add column if not exists staff      text references public.akun_staff(id);
+alter table public.akun_expenses add column if not exists staff_kind text;   -- fee_shift | bon | lain
+
+-- id karyawan yang disebut di teks (kata utuh), NULL bila tidak ada
+create or replace function public.akun_staff_of(p text) returns text
+language sql stable as $$
+  with t as (select ' ' || btrim(regexp_replace(lower(coalesce(p, '')), '[^a-z0-9]+', ' ', 'g')) || ' ' as s)
+  select st.id
+    from t, public.akun_staff st
+   where st.enabled
+     and exists (select 1 from unnest(array[lower(st.name)] || st.aliases) a where position(' ' || lower(a) || ' ' in t.s) > 0)
+   order by st.position limit 1
+$$;
+
+-- nama resmi barista dari tulisan di lembar (NULL bila tidak dikenal)
+create or replace function public.akun_staff_name(p text) returns text
+language sql stable as $$ select st.name from public.akun_staff st where st.id = public.akun_staff_of(p) $$;
+
+create or replace function public.akun_tag_staff() returns trigger
+language plpgsql as $$
+declare
+  t text := ' ' || btrim(regexp_replace(lower(coalesce(new.item, '')), '[^a-z0-9]+', ' ', 'g')) || ' ';
+  v_staff text := public.akun_staff_of(new.item);
+  v_kind text;
+begin
+  if position(' fee ' in t) > 0 then v_kind := 'fee_shift';
+  elsif t ~ ' (kasbon|ngebon|utang|hutang) ' or (position(' bon ' in t) > 0 and v_staff is not null) then v_kind := 'bon';
+  elsif v_staff is not null then v_kind := 'lain';
+  end if;
+  new.staff := v_staff;
+  new.staff_kind := v_kind;
+  if v_kind in ('fee_shift', 'bon') and v_staff is null
+     and not (coalesce(new.flags, '[]'::jsonb) ? 'karyawan tidak dikenal') then
+    new.flags := coalesce(new.flags, '[]'::jsonb) || '"karyawan tidak dikenal"'::jsonb;
+  end if;
+  return new;
+end $$;
+drop trigger if exists akun_tag_staff_trg on public.akun_expenses;
+create trigger akun_tag_staff_trg before insert or update of item on public.akun_expenses
+  for each row execute function public.akun_tag_staff();
+
+-- tandai baris yang sudah ada
+update public.akun_expenses set item = item;
+
+-- Buku fee/bon per karyawan (untuk agen pemotong gaji). perlu_dicek = fee/bon tanpa nama karyawan yang dikenal.
+create or replace view public.akun_v_staff with (security_invoker = true) as
+select e.id as expense_id, e.expense_date as tanggal, e.staff as staff_id, st.name as nama,
+       e.staff_kind as jenis, e.amount, e.item, e.origin, e.sheet_id, (e.staff is null) as perlu_dicek
+  from public.akun_expenses e
+  left join public.akun_staff st on st.id = e.staff
+ where e.staff_kind is not null
+ order by e.expense_date, e.id;
+revoke all on public.akun_v_staff from public, anon, authenticated;
+grant select on public.akun_v_staff to service_role;
+
+create or replace view public.akun_v_staff_bulanan with (security_invoker = true) as
+select date_trunc('month', tanggal)::date as bulan, staff_id, nama,
+       coalesce(sum(amount) filter (where jenis = 'fee_shift'), 0)::int as fee_shift,
+       coalesce(sum(amount) filter (where jenis = 'bon'), 0)::int       as bon,
+       coalesce(sum(amount) filter (where jenis = 'lain'), 0)::int      as lain,
+       sum(amount)::int as total
+  from public.akun_v_staff
+ where staff_id is not null
+ group by 1, 2, 3
+ order by 1, 3;
+revoke all on public.akun_v_staff_bulanan from public, anon, authenticated;
+grant select on public.akun_v_staff_bulanan to service_role;
+
 -- ── Hak akses: hanya service_role (n8n) ─────────────────────────────
 grant all on public.akun_menu, public.akun_sheets, public.akun_shifts, public.akun_sales,
              public.akun_expenses, public.akun_pending_media,
              public.akun_vendors, public.akun_category_map, public.akun_qris_settlements,
-             public.akun_online_income, public.akun_bank_tx to service_role;
+             public.akun_online_income, public.akun_bank_tx, public.akun_staff to service_role;
 grant usage, select on all sequences in schema public to service_role;
 
 do $$
@@ -957,7 +1058,7 @@ begin
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
        and p.proname in ('akun_handle','akun_day_summary','dispatch_message','akun_pay_source','akun_match_vendor',
-                       'agent_chat_ok','agent_chat_scoped')
+                       'agent_chat_ok','agent_chat_scoped','akun_staff_of','akun_staff_name','akun_tag_staff')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
     execute format('grant execute on function %s to service_role', r.sig);
