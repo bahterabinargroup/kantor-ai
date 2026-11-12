@@ -345,6 +345,9 @@ begin
   if not coalesce((select enabled from public.agents where id = 'ipal'), false) then
     return jsonb_build_object('reply', null);
   end if;
+  -- laporan yang sudah lewat 30 menit tidak pernah dikonfirmasi lagi (mis. dibetulkan manual belakangan)
+  update public.ipal_reports set acked_at = now()
+   where acked_at is null and reported_at < now() - interval '30 minutes';
   with ready as (
     select r.kitchen_id, r.sender
       from public.ipal_reports r
