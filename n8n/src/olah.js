@@ -35,6 +35,8 @@ if (s.mode === 'qris' || s.mode === 'online') {
       ? 'Kirim tangkapan layar mutasi bank dengan caption "/akuntan qris", atau ketik baris: 11/11 203.000'
       : 'Kirim tangkapan layar aplikasi merchant dengan caption "/akuntan online", atau ketik baris: 10/11 shopee 97.917';
   }
+} else if (s.koreksi && s.koreksi.items.length) {
+  rpc = Object.assign({}, base, { kind: 'koreksi', date: s.koreksi.date, items: s.koreksi.items });
 } else if (s.mode === 'ditolak') {
   rpc = Object.assign({}, base, { kind: 'ignore' });
 } else if (v && v.type === 'lembar_harian') {

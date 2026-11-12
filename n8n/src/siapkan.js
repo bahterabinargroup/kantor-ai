@@ -68,6 +68,29 @@ function parseExpense(t) {
   return e;
 }
 
+// "koreksi 12/11: es 12k, fee Rafi 50k, telur tisu 20.5k" → mengganti seluruh daftar belanja lembar tanggal itu
+function parseKoreksi(t) {
+  const m = String(t).match(/^\s*(?:koreksi|revisi)\b\s*(?:belanja|lembar)?\s*([\s\S]*)$/i);
+  if (!m) return null;
+  let rest = m[1];
+  let date = null;
+  const colon = rest.search(/[:：\n]/);
+  const head = colon >= 0 ? rest.slice(0, colon) : '';
+  if (head && /\d/.test(head)) { date = parseDate(head); rest = rest.slice(colon + 1); }
+  else if (colon >= 0 && !/\d/.test(head)) { rest = rest.slice(colon + 1); }
+  const items = [];
+  for (const part of rest.split(/(?<!\d),|,(?!\d)|;|\n/)) {
+    const l = part.trim();
+    if (!l) continue;
+    const mm = l.match(/^(.*?)[\s:=\-]*(?:rp\.?\s*)?(\d[\d.,]*\s*(?:jt|juta|k|rb|ribu)?)\s*$/i);
+    if (!mm) continue;
+    const item = mm[1].replace(/[\s:=\-]+$/, '').trim();
+    const amount = parseAmount(mm[2]);
+    if (item && amount) items.push({ item: item.slice(0, 120), amount });
+  }
+  return { date, items };
+}
+
 const MERCH = [['shopee', /shopee/i], ['gofood', /go\s*-?food|gojek/i], ['grab', /grab/i]];
 function merchantOf(t) { for (const [k, re] of MERCH) if (re.test(t)) return k; return null; }
 const DATE_RE = /\d{4}-\d{2}-\d{2}|\d{1,2}\s*[\/\-.]\s*\d{1,2}(?:\s*[\/\-.]\s*\d{2,4})?|\d{1,2}\s+(?:jan|feb|mar|apr|mei|jun|jul|agu|agt|ags|sep|okt|nov|des)[a-z]*(?:\s+\d{4})?/i;
@@ -93,8 +116,12 @@ const out = { message_id: p.message_id, chat_id: p.chat_id, sender: p.sender, ta
               media, need_vision: false, expense: null, rekap: false, rekap_date: null, vision_error: null };
 
 out.mode = null; out.text_rows = []; out.local_reply = null;
+out.koreksi = media ? null : parseKoreksi(raw || text);
+if (out.koreksi && out.koreksi.items.length === 0) {
+  out.local_reply = 'Format koreksi belanja: koreksi 12/11: es 12k, fee Rafi 50k, telur tisu 20.5k, nasi 5k';
+}
 const modeM = text.match(/^(qris|online)\b\s*([\s\S]*)$/i);
-out.expense = modeM ? null : parseExpense(raw || text);
+out.expense = (modeM || out.koreksi) ? null : parseExpense(raw || text);
 if (modeM) {
   out.mode = modeM[1].toLowerCase();
   const admins = String($env.AKUNTAN_ADMIN_CHATS || '').split(',').map(x => x.trim()).filter(Boolean);

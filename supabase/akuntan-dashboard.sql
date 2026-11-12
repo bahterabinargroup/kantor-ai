@@ -37,9 +37,18 @@ select jsonb_build_object(
         from public.akun_sales s
         join public.akun_sheets sh on sh.id = s.sheet_id
         left join public.akun_menu mm on mm.id = s.menu_id
-       where sh.sheet_date between p_from and p_to and coalesce(s.menu_id, '') <> 'rokok_signature'
+       where sh.sheet_date between p_from and p_to and coalesce(mm.category, '') <> 'eceran'
        group by coalesce(mm.name, s.item_name)
        order by sum(s.qty) desc limit 10) q), '[]'::jsonb),
+  'eceran', coalesce((select jsonb_agg(m order by (m->>'omzet')::int desc) from (
+      select jsonb_build_object('nama', mm.name,
+                                'qty', case when mm.id = 'rokok_signature' then 0 else sum(s.qty)::int end,
+                                'omzet', sum(s.qty * coalesce(s.unit_price, 0))::int) as m
+        from public.akun_sales s
+        join public.akun_sheets sh on sh.id = s.sheet_id
+        join public.akun_menu mm on mm.id = s.menu_id and mm.category = 'eceran'
+       where sh.sheet_date between p_from and p_to
+       group by mm.id, mm.name) q), '[]'::jsonb),
   'toko', coalesce((select jsonb_agg(t order by (t->>'total')::int desc) from (
       select jsonb_build_object('nama', coalesce(vendor, '(nama toko tidak tertulis)'), 'total', sum(amount)::int) as t
         from public.akun_expenses

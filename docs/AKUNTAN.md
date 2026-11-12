@@ -48,3 +48,20 @@ Buat grup WhatsApp khusus pengurus (kamu + bot, boleh ditambah akuntan), terpisa
 - **Pencairan QRIS**: kirim tangkapan layar mutasi bank dengan caption `/akuntan qris`, atau ketik `/akuntan qris` lalu baris `11/11 203.000` (tanggal = tanggal uang masuk di bank; tanggal real QRIS otomatis sehari sebelumnya).
 - **Pendapatan merchant**: tangkapan layar aplikasi dengan caption `/akuntan online`, atau ketik `/akuntan online` lalu baris `10/11 shopee 97.917`.
 - Satu foto per pesan. Bot membalas: jumlah baris tercatat, cocok/selisih dengan kertas (QRIS), potongan (online), dan bagian yang ragu dibaca.
+
+
+## Koreksi belanja lewat teks
+
+Kalau bot salah baca daftar belanja di lembar, ketik di grup (satu pesan):
+
+`koreksi 12/11: es 12k, fee Rafi 50k, telur tisu 20.5k, nasi 5k, fee Erico 50k, pinjam uang plastik 10k`
+
+- Seluruh daftar belanja lembar tanggal itu **diganti** dengan daftar di pesan, lalu cash dan selisih dihitung ulang.
+- Tanggal boleh dihilangkan (`koreksi: es 12k, ...`): dipakai lembar terakhir.
+- Baris "pinjam / ambil uang plastik" (kembalian kasir) bukan belanja. Dicatat sebagai uang plastik yang masuk kasir
+  (kolom `akun_sheets.plastik_in`) dan ikut dihitung di cash akhir.
+
+## Barang eceran
+
+Rokok Eceran, Rokok Signature, dan Air Mineral/Es Teh punya kategori `eceran`: tidak ikut "Menu terlaris",
+tampil di kartu **Barang eceran** di halaman laporan.

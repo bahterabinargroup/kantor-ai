@@ -22,7 +22,7 @@
 create table if not exists public.akun_menu (
   id        text primary key check (id ~ '^[a-z0-9_]+$'),
   name      text not null,                 -- nama seperti tertulis di lembar
-  category  text not null default 'lain',  -- coffee | non_coffee | makanan | lain
+  category  text not null default 'lain',  -- coffee | non_coffee | makanan | lain | eceran (barang eceran: rokok, air mineral — bukan menu)
   price     int,                           -- Rupiah penuh. NULL = harga belum diisi
   aliases   text[] not null default '{}',
   position  int not null default 0,
@@ -105,6 +105,7 @@ alter table public.akun_sheets  add column if not exists belanja       int;  -- 
 alter table public.akun_sheets  add column if not exists qris_written  int;  -- QRIS yang ditulis barista (Σ shift)
 alter table public.akun_sheets  add column if not exists cash_expected int;  -- modal + tally tunai − belanja
 alter table public.akun_sheets  add column if not exists cash_revenue  int;  -- cash akhir − modal + belanja  → "Penjualan Cash" di laba-rugi
+alter table public.akun_sheets  add column if not exists plastik_in    int not null default 0;  -- uang plastik yang dipinjam ke kasir untuk kembalian (bukan belanja)
 alter table public.akun_sheets  add column if not exists cash_variance int;  -- cash akhir − cash_expected (= "petty cash harian" di arus kas)
 alter table public.akun_expenses add column if not exists vendor       text; -- nama toko (dari nota), mis. "Mbak Ning"
 alter table public.akun_expenses add column if not exists pay_source   text; -- cash_berdi | plastik | raka | NULL
@@ -210,15 +211,15 @@ insert into public.akun_menu (id, name, category, price, aliases, position, menu
   ('nasi_kashmir','Nasi Kashmir','makanan',13000,'{}',45,'FOODIES!',4568),
   ('red_panda','Red Panda','makanan',13000,'{}',46,'FOODIES!',5004),
   ('snack','Snack','makanan',10000,'{"Otak-Otak","Pisang Cokelat","Snack","Snack (10K)","Tahu Walik"}',47,'PLATTER & SNACK',null),
-  ('rokok_eceran','Rokok Eceran','lain',2500,'{"Rokok","Rokok Eceran (2.5k)"}',51,'ROKOK',null),
+  ('rokok_eceran','Rokok Eceran','eceran',2500,'{"Rokok","Rokok Eceran (2.5k)"}',51,'ROKOK',null),
   ('telur_ceplok','Telur Ceplok','makanan',5000,'{"TELUR CEPLOK"}',60,'FOODIES!',null),
   ('berdikopi_500ml','Berdikopi 500ml','lain',38000,'{}',61,'LAINNYA',null),
   ('banofee_500ml','Banofee 500ml','lain',46000,'{}',62,'LAINNYA',null),
   ('karibia_500ml','Karibia 500ml','lain',38000,'{}',63,'LAINNYA',null),
   ('berdikopi_250ml','Berdikopi 250ml','lain',20000,'{}',64,'LAINNYA',null),
-  ('air_mineral','Air Mineral/Es Teh','lain',3000,'{"Air Mineral","Es Teh","Teh"}',65,'LAINNYA',null),
+  ('air_mineral','Air Mineral/Es Teh','eceran',3000,'{"Air Mineral","Es Teh","Teh"}',65,'LAINNYA',null),
   ('jamur_kerupuk','Jamur, Kerupuk','lain',3000,'{"Jamur","Jamur Kerupuk","Kerupuk"}',66,'LAINNYA',null),
-  ('rokok_signature','Rokok Signature','lain',1,'{"Rokok Signature (Rp)"}',67,'ROKOK',null),
+  ('rokok_signature','Rokok Signature','eceran',1,'{"Rokok Signature (Rp)"}',67,'ROKOK',null),
   ('kopi_susu_regal','Kopi Susu Regal','coffee',20000,'{}',68,'SWEET TOOTH CLUB!',7118),
   ('choconana','Choconana','coffee',23000,'{}',69,'SWEET TOOTH CLUB!',null),
   ('japanese_v60','Japanese V60','coffee',20000,'{}',70,'MANUAL BREW',3530)
@@ -435,6 +436,7 @@ declare
   v_belanja numeric; v_modal int; v_last_cash int; v_qris_written int; v_exp numeric;
   v_flags jsonb := '[]'::jsonb; v_unc text; v_unknown text; v_disc int; v_reply text;
   v_check text[] := '{}';
+  v_plastik int := 0; v_res jsonb;
   -- pengeluaran
   e jsonb; v_amount int; v_item text; v_edate date; v_total int; v_rows int; v_id bigint; v_has_media boolean := false;
   v_pend record; v_photo jsonb := p->'photo'; v_vendor text; v_pay text;
@@ -506,6 +508,25 @@ begin
            ', potongan ' || public.akun_rp(v_tot_k - v_tot_m) else '' end);
   end if;
 
+  -- ═══ KOREKSI BELANJA LEMBAR ═══
+  -- p.date (boleh kosong = lembar terakhir), p.items = [{item, amount}] → menggantikan seluruh daftar belanja lembar itu,
+  -- lalu lembar diproses ulang (cash, selisih, dsb. dihitung ulang).
+  if v_kind = 'koreksi' then
+    begin v_date := (p->>'date')::date; exception when others then v_date := null; end;
+    if v_date is null then
+      select sheet_date into v_date from public.akun_sheets order by sheet_date desc limit 1;
+    end if;
+    select raw into s from public.akun_sheets where sheet_date = v_date;
+    if s is null then
+      return jsonb_build_object('reply', 'Lembar ' || coalesce(public.akun_tgl(v_date), 'itu') || ' belum tercatat, jadi belum bisa dikoreksi. Kirim foto lembarnya dulu.');
+    end if;
+    s := (s - 'uncertain') || jsonb_build_object('date', v_date::text, 'date_confident', true,
+                                                 'expenses', coalesce(p->'items', '[]'::jsonb));
+    v_res := public.akun_handle(p || jsonb_build_object('kind', 'sheet', 'sheet', s));
+    return jsonb_set(v_res, '{reply}', to_jsonb(
+      replace(replace(coalesce(v_res->>'reply', ''), '✅ Lembar ', '✏️ Koreksi belanja lembar '), ' (menggantikan kiriman sebelumnya)', '')));
+  end if;
+
   -- ═══ LEMBAR HARIAN ═══
   if v_kind = 'sheet' then
     s := p->'sheet';
@@ -552,6 +573,11 @@ begin
     for ex in select * from jsonb_array_elements(coalesce(s->'expenses', '[]'::jsonb)) loop
       v_amount := public.akun_int(ex->'amount');
       continue when v_amount is null or btrim(coalesce(ex->>'item','')) = '';
+      -- "pinjam/ambil uang plastik (buat kembalian)" = uang pindah dari plastik ke kasir, BUKAN belanja
+      if public.akun_norm(ex->>'item') ~ 'plas?tik' and public.akun_norm(ex->>'item') ~ '(pinj|ambil|kembali)' then
+        v_plastik := v_plastik + v_amount;
+        continue;
+      end if;
       insert into public.akun_expenses (expense_date, item, amount, origin, sheet_id, message_id, chat_id, sender)
       values (v_date, left(btrim(ex->>'item'), 120), v_amount, 'lembar', v_sheet, v_msg, v_chat, v_sender);
     end loop;
@@ -588,12 +614,13 @@ begin
     elsif v_missing_cash is not null then
       v_check := array_append(v_check, (('Cash belum bisa dicek (harga ' || v_missing_cash || ' belum ada)'))::text);
     else
-      v_exp := v_modal + v_cash - v_belanja;
+      v_exp := v_modal + v_cash + v_plastik - v_belanja;
       if round(v_exp) = v_last_cash then
         v_check := array_append(v_check, ('Cash akhir cocok ✓')::text);
       else
         v_check := array_append(v_check, (('⚠️ Cash akhir tertulis ' || public.akun_rp(v_last_cash) || ', hitungan ' || public.akun_rp(v_exp)
                                || ' (modal ' || public.akun_rp(v_modal) || ' + tunai ' || public.akun_rp(v_cash)
+                               || case when v_plastik > 0 then ' + plastik ' || public.akun_rp(v_plastik) else '' end
                                || ' − belanja ' || public.akun_rp(v_belanja) || ')'))::text);
         v_flags := v_flags || to_jsonb('selisih cash akhir ' || public.akun_rp(v_last_cash - v_exp));
       end if;
@@ -609,17 +636,19 @@ begin
         flags = v_flags,
         cash_sales = round(v_cash), qris_sales = round(v_qris), online_sales = round(v_online),
         belanja = round(v_belanja), qris_written = v_qris_written,
-        cash_expected = case when v_modal is not null and v_missing_cash is null then round(v_modal + v_cash - v_belanja)::int end,
-        cash_revenue  = case when v_modal is not null and v_last_cash is not null then v_last_cash - v_modal + round(v_belanja)::int end,
+        cash_expected = case when v_modal is not null and v_missing_cash is null then round(v_modal + v_cash + v_plastik - v_belanja)::int end,
+        plastik_in = v_plastik,
+        cash_revenue  = case when v_modal is not null and v_last_cash is not null then v_last_cash - v_modal - v_plastik + round(v_belanja)::int end,
         cash_variance = case when v_modal is not null and v_last_cash is not null and v_missing_cash is null
-                             then v_last_cash - round(v_modal + v_cash - v_belanja)::int end
+                             then v_last_cash - round(v_modal + v_cash + v_plastik - v_belanja)::int end
       where id = v_sheet;
 
     v_reply := '✅ Lembar ' || public.akun_tgl(v_date) || ' tercatat' ||
                case when v_replaced then ' (menggantikan kiriman sebelumnya)' else '' end || E'.\n' ||
                'Penjualan: Cash ' || public.akun_rp(v_cash) || ' · QRIS ' || public.akun_rp(v_qris) ||
                ' · Online ' || public.akun_rp(v_online) || E'\n' ||
-               'Belanja di lembar: ' || public.akun_rp(v_belanja);
+               'Belanja di lembar: ' || public.akun_rp(v_belanja) ||
+               case when v_plastik > 0 then E'\nUang plastik dipakai untuk kembalian: ' || public.akun_rp(v_plastik) || ' (bukan belanja)' else '' end;
     if cardinality(v_check) > 0 then
       v_reply := v_reply || E'\n' || array_to_string(v_check, E'\n');
     end if;
@@ -854,7 +883,7 @@ end $$;
 -- Tidak menimpa config/enabled bila baris sudah ada.
 insert into public.agents (id, name, role, emoji, color, triggers, priority, enabled, desk, config)
 values ('akuntan', 'Akuntan', 'Lembar penjualan & pengeluaran Berdikari Koffee', '🧾', '#f59e0b',
-        array['@media', 'laporan pengeluaran', 'nominal pengeluaran'],
+        array['@media', 'laporan pengeluaran', 'nominal pengeluaran', 'koreksi'],
         8, false, '{"x":-2,"z":0}', '{"redact_events": true}')
 on conflict (id) do update
   set name = excluded.name, role = excluded.role, emoji = excluded.emoji, color = excluded.color,

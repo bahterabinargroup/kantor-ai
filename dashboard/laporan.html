@@ -83,6 +83,9 @@
     <div class="box"><h2>Belanja di mana (toko langganan)</h2><div id="toko"></div></div>
   </section>
 
+  <section class="box"><h2>Barang eceran (rokok, air mineral)</h2><div id="eceran"></div>
+    <p><small class="mut">Bukan menu kafe, jadi tidak ikut daftar menu terlaris. Rokok Signature dihitung dalam rupiah.</small></p></section>
+
   <section class="box"><h2>Perlu diperhatikan</h2><div id="perhatian"></div></section>
 
   <section class="box"><h2>Rincian harian</h2><div class="wrap"><table id="tabel"></table></div>
@@ -167,6 +170,7 @@
 
     chart(days);
     bars($('menu'), (d.menu || []).map(m => ({ n: m.nama, v: m.qty, o: m.omzet })), '#38bdf8', r => r.v + 'x · ' + jt(r.o));
+    bars($('eceran'), (d.eceran || []).map(m => ({ n: m.nama, v: m.omzet, q: m.qty })), '#fbbf24', r => (r.q ? r.q + 'x · ' : '') + jt(r.v));
     bars($('toko'), (d.toko || []).map(m => ({ n: m.nama, v: m.total })), '#f87171', r => rp(r.v));
 
     const p = d.perhatian || {}, ph = $('perhatian'); ph.replaceChildren(); let any = false;
