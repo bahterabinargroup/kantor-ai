@@ -565,7 +565,6 @@ begin
         end loop;
         if v_date is null then v_date := v_today; end if;
         v_flags := v_flags || to_jsonb('tanggal di lembar terbaca ' || v_orig::text || ', dipakai ' || v_date::text);
-        v_datenote := E'\n📅 Tanggal di lembar terbaca ' || public.akun_tgl(v_orig) || ', dipakai ' || public.akun_tgl(v_date) || '.';
       end;
     end if;
     -- kirim ulang tanggal yang sama = menggantikan
@@ -708,7 +707,7 @@ begin
     -- bagian yang ragu dibaca
     select string_agg('• ' || u, E'\n') into v_unc from (
       select left(btrim(x), 140) as u from jsonb_array_elements_text(coalesce(s->'uncertain', '[]'::jsonb)) x
-       where btrim(x) <> '' limit 5) q;
+       where btrim(x) <> '' and x !~* 'tanggal|hari,' limit 5) q;
     if v_unc is not null then
       v_reply := v_reply || E'\n❓ Mohon dicek, tulisan kurang jelas:\n' || v_unc;
     end if;
