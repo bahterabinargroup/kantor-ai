@@ -521,7 +521,9 @@ begin
             nullif(initcap(left(btrim(coalesce(e->>'reporter','')), 40)), ''), v_msg, v_chat, v_sender,
             left(coalesce(e->>'raw',''), 300))
     on conflict (message_id) where message_id is not null do nothing;
-    return jsonb_build_object('reply', null);
+    get diagnostics v_rows = row_count;
+    if v_rows = 0 then return jsonb_build_object('reply', null, 'duplicate', true); end if;
+    return jsonb_build_object('reply', 'Pengeluaran sudah aku catat kakak Meita 🙏');
   end if;
 
   -- ═══ KOREKSI BELANJA LEMBAR ═══
@@ -820,7 +822,7 @@ begin
 end $$;
 
 -- ── Grup PENGELUARAN (Meita → Balqis): pencatatan terpisah, TIDAK ikut hitungan kas/laporan kafe ──
--- Format pesan: "1 september / peralatan tentrem / 177.000 / cash" (urutan baris bebas). Bot diam (tanpa balasan).
+-- Format pesan: "1 september / peralatan tentrem / 177.000 / cash" (urutan baris bebas). Bot membalas singkat setelah tercatat.
 create table if not exists public.akun_pengeluaran_grup (
   id          bigint generated always as identity primary key,
   tanggal     date not null,
