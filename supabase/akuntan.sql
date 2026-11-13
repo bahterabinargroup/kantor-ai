@@ -430,7 +430,7 @@ declare
   v_chat    text := p->>'chat_id';
   v_sender  text := p->>'sender';
   -- lembar
-  s jsonb; v_date date; v_sheet bigint; v_replaced boolean := false;
+  s jsonb; v_date date; v_sheet bigint; v_replaced boolean := false; v_datenote text := '';
   sh jsonb; sl jsonb; ex jsonb; v_shift int; v_menu text; v_price int; v_chan text; v_qty int; v_ink text;
   v_cash numeric; v_qris numeric; v_online numeric; v_missing_all text; v_missing_cash text; v_missing_qris text;
   v_belanja numeric; v_modal int; v_last_cash int; v_qris_written int; v_exp numeric;
@@ -551,6 +551,22 @@ begin
     begin v_date := coalesce((s->>'date')::date, v_today); exception when others then v_date := v_today; end;
     if coalesce((s->>'date_confident')::boolean, true) = false or s->>'date' is null then
       v_flags := v_flags || to_jsonb('tanggal lembar kurang jelas, dipakai ' || v_date::text);
+    end if;
+    -- tanggal tak masuk akal (salah baca tahun/hari, mis. 2024): lembar dikirim pada hari yang sama atau 1-10 hari sesudahnya.
+    -- Coba tahun ini/tahun lalu dengan hari-bulan yang sama; kalau masih di luar rentang, pakai hari ini.
+    if v_date > v_today + 1 or v_date < v_today - 10 then
+      declare v_orig date := v_date; v_try date; v_y int;
+      begin
+        v_date := null;
+        foreach v_y in array array[extract(year from v_today)::int, extract(year from v_today)::int - 1] loop
+          begin v_try := make_date(v_y, extract(month from v_orig)::int, extract(day from v_orig)::int);
+          exception when others then v_try := null; end;
+          if v_try is not null and v_try <= v_today + 1 and v_try >= v_today - 10 then v_date := v_try; exit; end if;
+        end loop;
+        if v_date is null then v_date := v_today; end if;
+        v_flags := v_flags || to_jsonb('tanggal di lembar terbaca ' || v_orig::text || ', dipakai ' || v_date::text);
+        v_datenote := E'\n📅 Tanggal di lembar terbaca ' || public.akun_tgl(v_orig) || ', dipakai ' || public.akun_tgl(v_date) || '.';
+      end;
     end if;
     -- kirim ulang tanggal yang sama = menggantikan
     delete from public.akun_sheets where sheet_date = v_date;
@@ -679,7 +695,7 @@ begin
                'Belanja di lembar: ' || public.akun_rp(v_belanja) ||
                case when v_plastik > 0 then E'\nUang plastik dipakai untuk kembalian: ' || public.akun_rp(v_plastik) || ' (bukan belanja)' else '' end ||
                case when v_stf is not null then E'\nPotongan karyawan dicatat: ' || v_stf else '' end ||
-               case when v_stf_bad is not null then E'\n❓ Fee/bon tanpa nama karyawan yang dikenal: ' || v_stf_bad else '' end;
+               case when v_stf_bad is not null then E'\n❓ Fee/bon tanpa nama karyawan yang dikenal: ' || v_stf_bad else '' end || v_datenote;
     if cardinality(v_check) > 0 then
       v_reply := v_reply || E'\n' || array_to_string(v_check, E'\n');
     end if;
