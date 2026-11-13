@@ -85,3 +85,7 @@ jangan menjumlah ulang dari belanja. Nama baru: tambah baris di `akun_staff`.
 ## Grup PENGELUARAN (Meita → Balqis)
 Grup `GRUP PENGELUARAN` (120363423195221113@g.us). Satu pengeluaran per pesan, urutan baris bebas: `1 september / peralatan tentrem / 177.000 / cash` (kata "pribadi" menandai pengeluaran pribadi). Bot mencatat ke tabel terpisah `akun_pengeluaran_grup` (kolom: tanggal, item, amount, metode, pribadi, reporter). Tidak ikut hitungan kas/laporan kafe. Setelah tercatat bot membalas "Pengeluaran sudah aku catat kakak Meita 🙏" (tidak membalas bila pesan dobel atau bukan format pengeluaran). Foto di grup ini diabaikan.
 Aktifkan: jalankan `supabase/akuntan-grup-pengeluaran.sql`, isi `.env` `AKUNTAN_PENGELUARAN_CHATS=120363423195221113@g.us` (dan tambahkan ke `WA_ALLOWED_CHATS` bila diisi), lalu `docker compose up -d n8n`.
+
+## Cara menulis garis & langkah analisis
+- **Blok**: 4 garis tegak + 1 coretan miring/mendatar yang memotongnya = 5. Itu cara menulis yang wajar, bukan pembatalan; AI diberi tahu aturan ini.
+- **Analisis (berpikir)**: bila lembar tercatat dengan peringatan selisih (⚠️), AI melakukan satu langkah penalaran tambahan (Gemini, teks saja) lalu menambahkan "💡 Analisis" berisi 1-4 poin penyebab paling masuk akal dan yang perlu dicek. Hanya saran: tidak mengubah data. Bila gagal, balasan asli tetap dikirim tanpa analisis.

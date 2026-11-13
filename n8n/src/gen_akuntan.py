@@ -75,7 +75,14 @@ nodes = [
  code("Olah hasil", [2000, 0], "olah.js"),
  http("Catat (RPC akun_handle)", [1440, 0], "={{ $env.SUPABASE_URL }}/rest/v1/rpc/akun_handle", "={{ JSON.stringify({ p: $json.p }) }}", supabase=True),
  code("Susun balasan", [1680, 0], "balasan.js"),
- if_node("Ada balasan?", [1920, 0], "={{ $json.reply }}", "notEmpty"),
+ if_node("Perlu analisis?", [1800, 0], "={{ $json.analisis_body ? 'y' : '' }}", "notEmpty"),
+ node("Analisis (berpikir)", "n8n-nodes-base.httpRequest", 4.2, [1920, 160], {
+   "method": "POST", "url": "={{ ($env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\\/+$/, '') + '/v1beta/models/' + $json.analisis_model + ':generateContent' }}",
+   "sendHeaders": True, "specifyHeaders": "json", "jsonHeaders": "={{ JSON.stringify({ 'x-goog-api-key': $env.GEMINI_API_KEY, 'content-type': 'application/json' }) }}",
+   "sendBody": True, "specifyBody": "json", "jsonBody": "={{ JSON.stringify($json.analisis_body) }}",
+   "options": {"timeout": 60000}}, onError="continueRegularOutput", retryOnFail=True, maxTries=2, waitBetweenTries=3000),
+ code("Gabung analisis", [2040, 160], "gabung.js"),
+ if_node("Ada balasan?", [2160, 0], "={{ $json.reply }}", "notEmpty"),
  http("Balas ke grup", [2160, -80], "http://n8n:5678/webhook/lib-send-wa",
       "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.reply }) }}"),
  http("Tutup tugas", [2400, 0], "={{ $env.SUPABASE_URL }}/rest/v1/rpc/finish_task",
@@ -100,7 +107,10 @@ conn["Jawaban 2 terbaca?"] = {"main": [[{"node": "Olah hasil", "type": "main", "
 conn.update(c("Baca foto ulang (3, model cadangan)", "Olah hasil"))
 conn.update(c("Olah hasil", "Catat (RPC akun_handle)"))
 conn.update(c("Catat (RPC akun_handle)", "Susun balasan"))
-conn.update(c("Susun balasan", "Ada balasan?"))
+conn.update(c("Susun balasan", "Perlu analisis?"))
+conn["Perlu analisis?"] = {"main": [[{"node": "Analisis (berpikir)", "type": "main", "index": 0}], [{"node": "Ada balasan?", "type": "main", "index": 0}]]}
+conn.update(c("Analisis (berpikir)", "Gabung analisis"))
+conn.update(c("Gabung analisis", "Ada balasan?"))
 conn["Ada balasan?"] = {"main": [[{"node": "Balas ke grup", "type": "main", "index": 0}], [{"node": "Tutup tugas", "type": "main", "index": 0}]]}
 conn.update(c("Balas ke grup", "Tutup tugas"))
 conn.update(c("Tutup tugas", "Status: santai"))
