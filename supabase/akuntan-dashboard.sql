@@ -7,17 +7,20 @@ with h as (
 ), ex as (
   select expense_date, sum(amount)::int as jml
     from public.akun_expenses where origin = 'laporan' and expense_date between p_from and p_to group by 1
+), exl as (   -- belanja di lembar yang BELUM tercatat di laporan teks (yang sudah tercatat = dup_of terisi, tidak dihitung dua kali)
+  select expense_date, sum(amount)::int as jml
+    from public.akun_expenses where origin = 'lembar' and dup_of is null and expense_date between p_from and p_to group by 1
 ), days as (
-  select tanggal as tgl from h union select expense_date from ex
+  select tanggal as tgl from h union select expense_date from ex union select expense_date from exl
 ), harian as (
   select d.tgl,
          coalesce(h.cash_revenue, 0)  as cash,
          coalesce(h.qris, 0)          as qris,
          coalesce(h.online, 0)        as online,
-         coalesce(h.belanja_harian, 0) as belanja_lembar,
+         coalesce(exl.jml, 0)         as belanja_lembar,
          coalesce(ex.jml, 0)          as laporan,
          h.pisah_modal, h.qris_status, h.online_status
-    from days d left join h on h.tanggal = d.tgl left join ex on ex.expense_date = d.tgl
+    from days d left join h on h.tanggal = d.tgl left join ex on ex.expense_date = d.tgl left join exl on exl.expense_date = d.tgl
 )
 select jsonb_build_object(
   'from', p_from, 'to', p_to,

@@ -372,6 +372,38 @@ language sql stable as $$
    order by m.position limit 1
 $$;
 
+
+-- ── Anti-dobel: belanja yang sama muncul di lembar harian DAN di laporan teks (nota) ──
+-- Pasangkan 1:1 per tanggal: nominal sama (+ nama mirip didahulukan). Baris lembar yang cocok diberi dup_of = id laporan,
+-- sehingga di total pengeluaran hanya dihitung sekali (laporan teks dianggap utama: ada pelapor, toko, foto nota).
+-- Hitungan kas harian tetap memakai SEMUA belanja di lembar (itu uang yang keluar dari laci).
+alter table public.akun_expenses add column if not exists dup_of bigint;
+create or replace function public.akun_dedupe(p_date date) returns int
+language plpgsql as $$
+declare l record; t record; v_best bigint; v_score int; v_s int; v_n int := 0; tok text;
+begin
+  update public.akun_expenses set dup_of = null where origin = 'lembar' and expense_date = p_date and dup_of is not null;
+  for l in select id, item, amount from public.akun_expenses
+            where origin = 'lembar' and expense_date = p_date and amount > 0 order by id loop
+    v_best := null; v_score := -1;
+    for t in select e.id, e.item from public.akun_expenses e
+              where e.origin = 'laporan' and e.expense_date = p_date and e.amount = l.amount
+                and not exists (select 1 from public.akun_expenses x where x.dup_of = e.id)
+              order by e.id loop
+      v_s := 0;
+      for tok in select w from regexp_split_to_table(lower(l.item), '[^a-z0-9]+') w where length(w) >= 3 loop
+        if position(tok in lower(t.item)) > 0 then v_s := v_s + 1; end if;
+      end loop;
+      if v_s > v_score then v_score := v_s; v_best := t.id; end if;
+    end loop;
+    if v_best is not null then
+      update public.akun_expenses set dup_of = v_best where id = l.id;
+      v_n := v_n + 1;
+    end if;
+  end loop;
+  return v_n;
+end $$;
+
 -- ── Rekap satu hari (juga untuk perintah "/akuntan rekap") ──────────
 create or replace function public.akun_day_summary(p_date date) returns text
 language plpgsql stable as $$
@@ -435,7 +467,7 @@ declare
   v_cash numeric; v_qris numeric; v_online numeric; v_missing_all text; v_missing_cash text; v_missing_qris text;
   v_belanja numeric; v_modal int; v_last_cash int; v_qris_written int; v_exp numeric;
   v_flags jsonb := '[]'::jsonb; v_unc text; v_unknown text; v_disc int; v_reply text;
-  v_check text[] := '{}';
+  v_check text[] := '{}'; v_dupn int := 0; v_dupnote text := '';
   v_plastik int := 0; v_res jsonb; v_stf text; v_stf_bad text;
   -- pengeluaran
   e jsonb; v_amount int; v_item text; v_edate date; v_total int; v_rows int; v_id bigint; v_has_media boolean := false;
@@ -687,6 +719,11 @@ begin
                              then v_last_cash - round(v_modal + v_cash + v_plastik - v_belanja)::int end
       where id = v_sheet;
 
+    v_dupn := public.akun_dedupe(v_date);
+    if v_dupn > 0 then
+      select E'\n🔗 ' || v_dupn || ' belanja di lembar sama dengan laporan teks, dihitung sekali: ' || string_agg(item, ' · ' order by id)
+        into v_dupnote from public.akun_expenses where sheet_id = v_sheet and dup_of is not null;
+    end if;
     v_reply := '✅ Lembar ' || public.akun_tgl(v_date) || ' tercatat' ||
                case when v_replaced then ' (menggantikan kiriman sebelumnya)' else '' end || E'.\n' ||
                'Penjualan: Cash ' || public.akun_rp(v_cash) || ' · QRIS ' || public.akun_rp(v_qris) ||
@@ -694,7 +731,7 @@ begin
                'Belanja di lembar: ' || public.akun_rp(v_belanja) ||
                case when v_plastik > 0 then E'\nUang plastik dipakai untuk kembalian: ' || public.akun_rp(v_plastik) || ' (bukan belanja)' else '' end ||
                case when v_stf is not null then E'\nPotongan karyawan dicatat: ' || v_stf else '' end ||
-               case when v_stf_bad is not null then E'\n❓ Fee/bon tanpa nama karyawan yang dikenal: ' || v_stf_bad else '' end || v_datenote;
+               case when v_stf_bad is not null then E'\n❓ Fee/bon tanpa nama karyawan yang dikenal: ' || v_stf_bad else '' end || v_datenote || coalesce(v_dupnote, '');
     if cardinality(v_check) > 0 then
       v_reply := v_reply || E'\n' || array_to_string(v_check, E'\n');
     end if;
@@ -755,6 +792,7 @@ begin
           source_raw = nullif(left(btrim(coalesce(e->>'source_raw','')), 40), ''), pay_source = v_pay,
           vendor = coalesce(v_vendor, vendor)
         where id = v_id;
+      perform public.akun_dedupe(v_edate);
       return jsonb_build_object('reply', '✅ Pengeluaran tercatat: ' || v_item || ' ' || public.akun_rp(v_amount) ||
              coalesce(' (' || nullif(left(btrim(coalesce(e->>'source_raw','')), 40), '') || ')', '') ||
              ' · ' || public.akun_tgl(v_edate) || E'\n(digabung dengan bukti bayar yang sudah masuk)');
@@ -768,6 +806,7 @@ begin
     on conflict (message_id) where message_id is not null and origin = 'laporan' do nothing;
     get diagnostics v_rows = row_count;
     if v_rows = 0 then return jsonb_build_object('reply', null, 'duplicate', true); end if;
+    perform public.akun_dedupe(v_edate);
 
     v_reply := '✅ Pengeluaran tercatat: ' || v_item || ' ' || public.akun_rp(v_amount) ||
                coalesce(' (' || nullif(left(btrim(coalesce(e->>'source_raw','')), 40), '') || ')', '') ||
@@ -803,6 +842,7 @@ begin
     on conflict (message_id) where message_id is not null and origin = 'laporan' do nothing;
     get diagnostics v_rows = row_count;
     if v_rows = 0 then return jsonb_build_object('reply', null, 'duplicate', true); end if;
+    perform public.akun_dedupe(v_edate);
     return jsonb_build_object('reply', '✅ Bukti bayar tercatat: ' || v_item || ' ' || public.akun_rp(v_amount) ||
            ' · ' || public.akun_tgl(v_edate) || coalesce(' · ' || v_vendor, ''));
   end if;
@@ -1120,10 +1160,13 @@ begin
     select p.oid::regprocedure as sig
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
-       and p.proname in ('akun_handle','akun_day_summary','dispatch_message','akun_pay_source','akun_match_vendor',
+       and p.proname in ('akun_dedupe','akun_handle','akun_day_summary','dispatch_message','akun_pay_source','akun_match_vendor',
                        'agent_chat_ok','agent_chat_scoped','akun_staff_of','akun_staff_name','akun_tag_staff')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
     execute format('grant execute on function %s to service_role', r.sig);
   end loop;
 end $$;
+
+-- isi ulang pasangan dobel untuk semua tanggal yang punya lembar dan laporan
+select public.akun_dedupe(d) from (select distinct expense_date d from public.akun_expenses where origin = 'lembar') q;
