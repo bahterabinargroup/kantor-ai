@@ -721,8 +721,7 @@ begin
 
     v_dupn := public.akun_dedupe(v_date);
     if v_dupn > 0 then
-      select E'\n🔗 ' || v_dupn || ' belanja di lembar sama dengan laporan teks, dihitung sekali: ' || string_agg(item, ' · ' order by id)
-        into v_dupnote from public.akun_expenses where sheet_id = v_sheet and dup_of is not null;
+      v_dupnote := E'\n🔗 ' || v_dupn || ' belanja sama dengan laporan teks, dihitung sekali.';
     end if;
     v_reply := '✅ Lembar ' || public.akun_tgl(v_date) || ' tercatat' ||
                case when v_replaced then ' (menggantikan kiriman sebelumnya)' else '' end || E'.\n' ||
@@ -741,13 +740,7 @@ begin
     if v_unknown is not null then
       v_reply := v_reply || E'\nMenu tidak dikenal: ' || v_unknown;
     end if;
-    -- bagian yang ragu dibaca
-    select string_agg('• ' || u, E'\n') into v_unc from (
-      select left(btrim(x), 140) as u from jsonb_array_elements_text(coalesce(s->'uncertain', '[]'::jsonb)) x
-       where btrim(x) <> '' and x !~* 'tanggal|hari,' limit 5) q;
-    if v_unc is not null then
-      v_reply := v_reply || E'\n❓ Mohon dicek, tulisan kurang jelas:\n' || v_unc;
-    end if;
+    -- keraguan baca (uncertain) TIDAK ditampilkan di grup supaya balasan singkat; tetap tersimpan di akun_sheets.raw
     return jsonb_build_object('reply', v_reply, 'sheet_id', v_sheet, 'flags', v_flags);
   end if;
 
