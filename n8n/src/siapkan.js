@@ -228,7 +228,7 @@ if (media && out.mode === 'ditolak') {
           { inline_data: { mime_type: mt, data: b64 } },
           { text: prompt }
         ] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 4096, responseMimeType: 'application/json' }
+        generationConfig: { temperature: 0, maxOutputTokens: 16384, responseMimeType: 'application/json' }
       };
     } else {
       out.vision_provider = 'anthropic';

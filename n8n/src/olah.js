@@ -17,7 +17,10 @@ if (s.need_vision) {
     err = String(typeof m === 'string' ? m : JSON.stringify(m)).slice(0, 160);
   } else {
     v = extractJson(t);
-    if (!v) err = 'jawaban model bukan JSON';
+    if (!v) {
+      const fr = r.candidates && r.candidates[0] && r.candidates[0].finishReason;
+      err = 'jawaban model bukan JSON' + (fr ? ' (finish: ' + fr + ')' : '') + ' | ' + String(t).replace(/\s+/g, ' ').slice(0, 100);
+    }
   }
 }
 const base = { message_id: s.message_id, chat_id: s.chat_id, sender: s.sender };
