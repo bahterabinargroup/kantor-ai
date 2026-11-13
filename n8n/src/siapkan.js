@@ -189,6 +189,7 @@ if (media && out.mode === 'ditolak') {
       'Rupiah penuh tanpa titik. Tahun kalau tidak tertulis: ' + wibToday().slice(0, 4) + '. Jangan menebak; ragu = tulis di "uncertain".'
     ].join('\n') : [
       'Kamu membantu mencatat laporan kafe Berdikari Koffee dari foto di grup WhatsApp. Lihat foto, tentukan jenisnya, lalu balas HANYA dengan satu objek JSON valid (tanpa teks lain, tanpa tanda kutip kode).',
+      'PENTING: kerahkan seluruh kemampuanmu membaca foto. Foto sering miring, buram, berbayang, atau tulisan tangan berantakan; itu normal. JANGAN pernah menolak atau menjawab bahwa foto tidak jelas. Kalau mirip lembar rekap harian, anggap "lembar_harian", baca sebaik mungkin, dan tulis setiap keraguan di "uncertain".',
       '',
       'Jenis foto ("type"):',
       '- "lembar_harian": lembar rekap harian kafe. Ciri: tabel Shift 1 / Shift 2 (nama barista, Uang Modal, Cash Akhir, QRIS, Total Discount), daftar menu dengan garis hitung di kolom Cash / QRIS / Online, dan kotak "Pengeluaran belanja".',
@@ -221,6 +222,9 @@ if (media && out.mode === 'ditolak') {
       '- Jangan menebak. Kalau tulisan angka kurang jelas, isi nilai terbaikmu dan tulis keraguannya di "uncertain" (contoh: "cash akhir shift 2 terbaca 58400, mungkin 98000"). Kalau benar-benar tidak terbaca, isi null.'
     ].join('\n');
     out.need_vision = true;
+    const retryPrompt = prompt + '\n\nCATATAN SISTEM: jawaban sebelumnya tidak bisa diproses. Balas HANYA satu objek JSON yang LENGKAP dan tertutup (kurung kurawal seimbang), tanpa penjelasan, tanpa pemikiran panjang, tanpa tanda kutip kode. Ringkas: hanya field yang diminta.';
+    out.vision_model_2 = $env.AKUNTAN_GEMINI_MODEL || 'gemini-3.8-flash';
+    out.vision_model_3 = $env.AKUNTAN_GEMINI_MODEL_2 || 'gemini-flash-latest';
     if (($env.AKUNTAN_VISION || 'anthropic') === 'gemini') {
       out.vision_provider = 'gemini';
       out.vision_body = {
@@ -229,6 +233,13 @@ if (media && out.mode === 'ditolak') {
           { text: prompt }
         ] }],
         generationConfig: { temperature: 0, maxOutputTokens: 16384, responseMimeType: 'application/json' }
+      };
+      out.vision_body_retry = {
+        contents: [{ role: 'user', parts: [
+          { inline_data: { mime_type: mt, data: b64 } },
+          { text: retryPrompt }
+        ] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 32768, responseMimeType: 'application/json' }
       };
     } else {
       out.vision_provider = 'anthropic';
@@ -240,6 +251,10 @@ if (media && out.mode === 'ditolak') {
           { type: 'text', text: prompt }
         ] }]
       };
+      out.vision_body_retry = Object.assign({}, out.vision_body, { max_tokens: 8192, messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mt, data: b64 } },
+        { type: 'text', text: retryPrompt }
+      ] }] });
     }
   }
 }

@@ -61,7 +61,7 @@ if (s.grup_chat) {
 }
 // foto gagal dibaca dan tidak ada teks laporan: tandai tugas gagal (tanpa isi pesan) supaya terlihat di dashboard
 const failed = !!err && s.media && !s.expense && s.mode !== 'ditolak' && !s.local_reply;
-// jawaban model tak terbaca → minta kirim ulang; gangguan teknis (API key, jaringan) → diam, tugas ditandai gagal
-const unreadable = failed && /bukan JSON/.test(err);
+// semua kegagalan sistem → diam (tanpa minta kirim ulang), tugas ditandai gagal supaya terlihat di dashboard
+const unreadable = false;
 const uncertain = (v && Array.isArray(v.uncertain) ? v.uncertain : []).filter(x => x && String(x).trim()).slice(0, 5).map(x => String(x).slice(0, 140));
 return [{ json: { p: rpc, kind: rpc.kind, failed, unreadable, error: failed ? err : null, local_reply: localReply, uncertain: (s.mode === 'qris' || s.mode === 'online') ? uncertain : [] } }];

@@ -37,6 +37,14 @@ def if_node(name, pos, left, op):
                             "operator": {"type": "string", "operation": op, "singleValue": True}}],
             "combinator": "and"}, "options": {}})
 
+def vision_retry(name, pos, model_key):
+    url = ("={{ $('Siapkan').first().json.vision_provider === 'gemini' ? ($env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\\/+$/, '') + '/v1beta/models/' + $('Siapkan').first().json.%s + ':generateContent' : ($env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\\/+$/, '') + '/v1/messages' }}" % model_key)
+    hdr = ("={{ JSON.stringify($('Siapkan').first().json.vision_provider === 'gemini' ? { 'x-goog-api-key': $env.GEMINI_API_KEY, 'content-type': 'application/json' } : { 'x-api-key': $env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }) }}")
+    return node(name, "n8n-nodes-base.httpRequest", 4.2, pos, {
+        "method": "POST", "url": url, "sendHeaders": True, "specifyHeaders": "json", "jsonHeaders": hdr,
+        "sendBody": True, "specifyBody": "json", "jsonBody": "={{ JSON.stringify($('Siapkan').first().json.vision_body_retry) }}",
+        "options": {"timeout": 120000}}, onError="continueRegularOutput", retryOnFail=True, maxTries=3, waitBetweenTries=5000)
+
 nodes = [
  node("Catatan 0", "n8n-nodes-base.stickyNote", 1, [0, -320], {"content":
    "**Agen Akuntan** — mencatat pemasukan (foto lembar harian) dan pengeluaran (teks laporan + foto nota) kafe Berdikari.\n"
@@ -58,7 +66,13 @@ nodes = [
    "jsonHeaders": "={{ JSON.stringify($json.vision_provider === 'gemini' ? { 'x-goog-api-key': $env.GEMINI_API_KEY, 'content-type': 'application/json' } : { 'x-api-key': $env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }) }}",
    "sendBody": True, "specifyBody": "json", "jsonBody": "={{ JSON.stringify($json.vision_body) }}",
    "options": {"timeout": 120000}}, onError="continueRegularOutput", retryOnFail=True, maxTries=4, waitBetweenTries=5000),
- code("Olah hasil", [1200, 0], "olah.js"),
+ code("Cek jawaban 1", [1100, -80], "cek.js"),
+ if_node("Jawaban 1 terbaca?", [1250, -80], "={{ $json.__ok ? 'y' : '' }}", "notEmpty"),
+ vision_retry("Baca foto ulang (2)", [1400, 100], "vision_model_2"),
+ code("Cek jawaban 2", [1550, 100], "cek.js"),
+ if_node("Jawaban 2 terbaca?", [1700, 100], "={{ $json.__ok ? 'y' : '' }}", "notEmpty"),
+ vision_retry("Baca foto ulang (3, model cadangan)", [1850, 260], "vision_model_3"),
+ code("Olah hasil", [2000, 0], "olah.js"),
  http("Catat (RPC akun_handle)", [1440, 0], "={{ $env.SUPABASE_URL }}/rest/v1/rpc/akun_handle", "={{ JSON.stringify({ p: $json.p }) }}", supabase=True),
  code("Susun balasan", [1680, 0], "balasan.js"),
  if_node("Ada balasan?", [1920, 0], "={{ $json.reply }}", "notEmpty"),
@@ -77,7 +91,13 @@ conn.update(c("Webhook agen", "Status: kerja"))
 conn.update(c("Status: kerja", "Siapkan"))
 conn.update(c("Siapkan", "Perlu baca foto?"))
 conn["Perlu baca foto?"] = {"main": [[{"node": "Baca foto (Claude)", "type": "main", "index": 0}], [{"node": "Olah hasil", "type": "main", "index": 0}]]}
-conn.update(c("Baca foto (Claude)", "Olah hasil"))
+conn.update(c("Baca foto (Claude)", "Cek jawaban 1"))
+conn.update(c("Cek jawaban 1", "Jawaban 1 terbaca?"))
+conn["Jawaban 1 terbaca?"] = {"main": [[{"node": "Olah hasil", "type": "main", "index": 0}], [{"node": "Baca foto ulang (2)", "type": "main", "index": 0}]]}
+conn.update(c("Baca foto ulang (2)", "Cek jawaban 2"))
+conn.update(c("Cek jawaban 2", "Jawaban 2 terbaca?"))
+conn["Jawaban 2 terbaca?"] = {"main": [[{"node": "Olah hasil", "type": "main", "index": 0}], [{"node": "Baca foto ulang (3, model cadangan)", "type": "main", "index": 0}]]}
+conn.update(c("Baca foto ulang (3, model cadangan)", "Olah hasil"))
 conn.update(c("Olah hasil", "Catat (RPC akun_handle)"))
 conn.update(c("Catat (RPC akun_handle)", "Susun balasan"))
 conn.update(c("Susun balasan", "Ada balasan?"))

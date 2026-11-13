@@ -8,7 +8,7 @@ Mencatat **pemasukan** (foto lembar harian) dan **pengeluaran** (teks "LAPORAN P
 - Foto lembar harian → dibaca model Claude → garis per menu × harga → dicek: QRIS tertulis vs hitungan, dan **cash akhir shift 2 = modal + penjualan tunai − belanja** (shift 2 melanjutkan cash akhir shift 1). Yang tidak cocok ditandai di balasan.
 - Teks laporan pengeluaran + foto nota/barang dari pengirim yang sama (≤20 menit, urutan bebas) digabung jadi satu catatan.
 - **Bukti bayar** (foto struk token listrik, transfer, wifi, dll.) tanpa teks laporan dicatat otomatis sebagai pengeluaran (tanggal dari bukti, tanpa kategori). Kalau laporan teks dengan nominal & tanggal sama masuk sebelum/sesudahnya, keduanya digabung, tidak dobel.
-- Foto tidak terbaca → bot minta kirim ulang atau ketik manual.
+- Foto sulit dibaca → bot TIDAK pernah minta kirim ulang. Sistem mencoba sendiri sampai 3 kali (jawaban lebih longgar, lalu model cadangan `AKUNTAN_GEMINI_MODEL_2`, default gemini-flash-latest); bila tetap gagal, diam dan tugas ditandai gagal di dashboard beserta penyebabnya.
 - `/akuntan rekap`, `/akuntan rekap kemarin`, `/akuntan rekap 9 nov` → ringkasan satu hari (manual).
 - Foto TIDAK disimpan di server (aslinya tetap di WhatsApp; `message_id` dicatat). Nominal tidak masuk log dashboard (`redact_events`).
 
