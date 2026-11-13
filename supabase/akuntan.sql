@@ -508,6 +508,22 @@ begin
            ', potongan ' || public.akun_rp(v_tot_k - v_tot_m) else '' end);
   end if;
 
+  -- ═══ GRUP PENGELUARAN: satu pengeluaran per pesan, dicatat ke tabel terpisah, tanpa balasan ═══
+  if v_kind = 'grup_pengeluaran' then
+    e := p->'expense';
+    v_amount := public.akun_int(e->'amount');
+    if v_amount is null or v_amount <= 0 then return jsonb_build_object('reply', null); end if;
+    begin v_edate := (e->>'date')::date; exception when others then v_edate := null; end;
+    if v_edate is null then return jsonb_build_object('reply', null); end if;
+    insert into public.akun_pengeluaran_grup (tanggal, item, amount, metode, pribadi, reporter, message_id, chat_id, sender, raw)
+    values (v_edate, coalesce(nullif(left(btrim(coalesce(e->>'item','')), 120), ''), 'Pengeluaran'), v_amount,
+            nullif(left(btrim(coalesce(e->>'metode','')), 20), ''), coalesce((e->>'pribadi')::boolean, false),
+            nullif(initcap(left(btrim(coalesce(e->>'reporter','')), 40)), ''), v_msg, v_chat, v_sender,
+            left(coalesce(e->>'raw',''), 300))
+    on conflict (message_id) where message_id is not null do nothing;
+    return jsonb_build_object('reply', null);
+  end if;
+
   -- ═══ KOREKSI BELANJA LEMBAR ═══
   -- p.date (boleh kosong = lembar terakhir), p.items = [{item, amount}] → menggantikan seluruh daftar belanja lembar itu,
   -- lalu lembar diproses ulang (cash, selisih, dsb. dihitung ulang).
@@ -803,6 +819,28 @@ begin
   return jsonb_build_object('reply', null);
 end $$;
 
+-- ── Grup PENGELUARAN (Meita → Balqis): pencatatan terpisah, TIDAK ikut hitungan kas/laporan kafe ──
+-- Format pesan: "1 september / peralatan tentrem / 177.000 / cash" (urutan baris bebas). Bot diam (tanpa balasan).
+create table if not exists public.akun_pengeluaran_grup (
+  id          bigint generated always as identity primary key,
+  tanggal     date not null,
+  item        text not null,
+  amount      int  not null check (amount >= 0),
+  metode      text,                        -- cash | transfer | qris | debit | NULL
+  pribadi     boolean not null default false,
+  reporter    text,
+  message_id  text,
+  chat_id     text,
+  sender      text,
+  raw         text,
+  created_at  timestamptz not null default now()
+);
+create unique index if not exists akun_pgrup_msg_uidx on public.akun_pengeluaran_grup (message_id) where message_id is not null;
+create index if not exists akun_pgrup_tgl_idx on public.akun_pengeluaran_grup (tanggal);
+alter table public.akun_pengeluaran_grup enable row level security;
+revoke all on public.akun_pengeluaran_grup from public, anon, authenticated;
+grant all on public.akun_pengeluaran_grup to service_role;
+
 -- ── Routing per grup (perubahan kecil pada dispatch_message) ────────
 -- agents.config.chats = ["xxx@g.us", …] → agen HANYA menerima pesan dari chat itu, dan didahulukan
 --   daripada agen tanpa batas chat. Tanpa config.chats → perilaku lama (menerima dari mana saja).
@@ -849,6 +887,12 @@ begin
         'Agen "/' || v_cmd || E'" tidak ditemukan.\n' || public.agents_help());
     end if;
   else
+    -- grup yang SEMUA teksnya diserahkan ke satu agen (config.all_text_chats), mis. grup pengeluaran
+    select a.* into v_agent from public.agents a
+     where a.enabled and jsonb_typeof(a.config->'all_text_chats') = 'array'
+       and jsonb_exists(a.config->'all_text_chats', p_chat_id)
+     order by a.priority desc, a.id limit 1;
+    if v_agent.id is null then
     select a.* into v_agent
       from public.agents a
      where a.enabled
@@ -858,6 +902,7 @@ begin
                       and position(lower(t) in lower(v_text)) > 0)
      order by public.agent_chat_scoped(a.config, p_chat_id) desc, a.priority desc, a.id
      limit 1;
+    end if;
   end if;
 
   -- foto/video di grup → agen yang memasang pemicu '@media'.
@@ -1046,7 +1091,7 @@ grant select on public.akun_v_staff_bulanan to service_role;
 
 -- ── Hak akses: hanya service_role (n8n) ─────────────────────────────
 grant all on public.akun_menu, public.akun_sheets, public.akun_shifts, public.akun_sales,
-             public.akun_expenses, public.akun_pending_media,
+             public.akun_expenses, public.akun_pengeluaran_grup, public.akun_pending_media,
              public.akun_vendors, public.akun_category_map, public.akun_qris_settlements,
              public.akun_online_income, public.akun_bank_tx, public.akun_staff to service_role;
 grant usage, select on all sequences in schema public to service_role;

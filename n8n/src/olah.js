@@ -24,7 +24,9 @@ const base = { message_id: s.message_id, chat_id: s.chat_id, sender: s.sender };
 const isPhotoKind = v && (v.type === 'nota' || v.type === 'foto_barang' || v.type === 'bukti_bayar');
 let rpc;
 let localReply = s.local_reply || null;
-if (s.mode === 'qris' || s.mode === 'online') {
+if (s.grup_chat) {
+  rpc = s.grup ? Object.assign({}, base, { kind: 'grup_pengeluaran', expense: s.grup }) : Object.assign({}, base, { kind: 'ignore' });
+} else if (s.mode === 'qris' || s.mode === 'online') {
   const want = s.mode === 'qris' ? 'settlement' : 'online_income';
   const vr = v && v.type === want && Array.isArray(v.rows) ? v.rows : [];
   const rows = vr.concat(s.text_rows || []);

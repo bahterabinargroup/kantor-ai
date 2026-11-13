@@ -112,16 +112,41 @@ function parseLines(t, defMerchant) {
   return rows;
 }
 
+// Grup PENGELUARAN (format Meita): "1 september / peralatan tentrem / 177.000 / cash" — urutan baris bebas.
+const PGRUP = String($env.AKUNTAN_PENGELUARAN_CHATS || '').split(',').map(x => x.trim()).filter(Boolean);
+function parseGrup(t) {
+  const s = String(t || '').replace(/\r/g, '').trim();
+  const dm = s.match(/^\s*(\d{1,2}\s+(?:jan|feb|mar|apr|mei|jun|jul|agu|agt|ags|sep|okt|nov|des)[a-z]*(?:\s+\d{4})?)/i);
+  if (!dm) return null;
+  const date = parseDate(dm[1]);
+  if (!date) return null;
+  let rest = s.slice(dm[0].length);
+  const am = rest.match(/(?:rp\.?\s*)?(\d{1,3}(?:[.,]\d{3})+|\d{4,}|\d+(?:[.,]\d+)?\s*(?:k|rb|ribu|jt|juta))(?![\d])/i);
+  if (!am) return null;
+  const amount = parseAmount(am[1]);
+  if (!amount) return null;
+  rest = (rest.slice(0, am.index) + ' ' + rest.slice(am.index + am[0].length));
+  let metode = null;
+  rest = rest.replace(/\b(cash|tunai|transfer|tf|qris|debit)\b/ig, (m) => { metode = /^(tunai|cash)$/i.test(m) ? 'cash' : (/^tf$/i.test(m) ? 'transfer' : m.toLowerCase()); return ' '; });
+  let pribadi = false;
+  rest = rest.replace(/\b(pribadi)\b/ig, () => { pribadi = true; return ' '; });
+  let item = rest.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!item) item = pribadi ? 'Pribadi' : 'Pengeluaran';
+  return { date, amount, metode, pribadi, item: item.slice(0, 120), reporter: String(p.push_name || ''), raw: s.slice(0, 300) };
+}
+
 const out = { message_id: p.message_id, chat_id: p.chat_id, sender: p.sender, task_id: p.task_id,
               media, need_vision: false, expense: null, rekap: false, rekap_date: null, vision_error: null };
 
 out.mode = null; out.text_rows = []; out.local_reply = null;
-out.koreksi = media ? null : parseKoreksi(raw || text);
+out.grup = null; out.grup_chat = PGRUP.includes(p.chat_id);
+if (out.grup_chat) { out.media = false; out.grup = media ? null : parseGrup(raw || text); }
+out.koreksi = (media || out.grup_chat) ? null : parseKoreksi(raw || text);
 if (out.koreksi && out.koreksi.items.length === 0) {
   out.local_reply = 'Format koreksi belanja: koreksi 12/11: es 12k, fee Rafi 50k, telur tisu 20.5k, nasi 5k';
 }
 const modeM = text.match(/^(qris|online)\b\s*([\s\S]*)$/i);
-out.expense = (modeM || out.koreksi) ? null : parseExpense(raw || text);
+out.expense = (modeM || out.koreksi || out.grup_chat) ? null : parseExpense(raw || text);
 if (modeM) {
   out.mode = modeM[1].toLowerCase();
   const admins = String($env.AKUNTAN_ADMIN_CHATS || '').split(',').map(x => x.trim()).filter(Boolean);
@@ -136,7 +161,7 @@ if (modeM) {
   }
 }
 if (out.local_reply || out.mode === 'ditolak') { out.media = false; }
-if (!out.expense && !out.mode && /^rekap\b/i.test(text)) {
+if (!out.expense && !out.mode && !out.grup_chat && /^rekap\b/i.test(text)) {
   out.rekap = true;
   const rest = text.replace(/^rekap\s*/i, '').trim().toLowerCase();
   if (/^kemarin/.test(rest)) out.rekap_date = new Date(Date.parse(wibToday()) - 86400000).toISOString().slice(0, 10);
@@ -147,7 +172,7 @@ if (media && out.mode === 'ditolak') {
   // diam
 } else if (media && out.local_reply) {
   // ditolak dengan balasan
-} else if (media) {
+} else if (media && !out.grup_chat) {
   const b64 = String(p.media_base64 || '').replace(/^data:[^;]+;base64,/, '');
   if (!b64) {
     out.vision_error = 'foto tidak ikut terkirim ke n8n (media_base64 kosong)';

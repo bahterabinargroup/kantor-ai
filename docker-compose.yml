@@ -110,6 +110,7 @@ services:
       AKUNTAN_GEMINI_MODEL: ${AKUNTAN_GEMINI_MODEL:-}
       AKUNTAN_MODEL: ${AKUNTAN_MODEL:-claude-sonnet-5-5}
       AKUNTAN_ADMIN_CHATS: ${AKUNTAN_ADMIN_CHATS:-}
+      AKUNTAN_PENGELUARAN_CHATS: ${AKUNTAN_PENGELUARAN_CHATS:-}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/workflows:ro

@@ -81,3 +81,7 @@ Untuk agen pemotong gaji (hanya `service_role`):
 
 Fee dan bon tetap ikut hitungan belanja lembar (uangnya memang keluar dari kasir). Agen gaji cukup membaca view di atas;
 jangan menjumlah ulang dari belanja. Nama baru: tambah baris di `akun_staff`.
+
+## Grup PENGELUARAN (Meita → Balqis)
+Grup `GRUP PENGELUARAN` (120363423195221113@g.us). Satu pengeluaran per pesan, urutan baris bebas: `1 september / peralatan tentrem / 177.000 / cash` (kata "pribadi" menandai pengeluaran pribadi). Bot **diam** dan mencatat ke tabel terpisah `akun_pengeluaran_grup` (kolom: tanggal, item, amount, metode, pribadi, reporter). Tidak ikut hitungan kas/laporan kafe. Foto di grup ini diabaikan.
+Aktifkan: jalankan `supabase/akuntan-grup-pengeluaran.sql`, isi `.env` `AKUNTAN_PENGELUARAN_CHATS=120363423195221113@g.us` (dan tambahkan ke `WA_ALLOWED_CHATS` bila diisi), lalu `docker compose up -d n8n`.
