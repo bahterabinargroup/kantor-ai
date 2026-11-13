@@ -89,3 +89,6 @@ Aktifkan: jalankan `supabase/akuntan-grup-pengeluaran.sql`, isi `.env` `AKUNTAN_
 ## Cara menulis garis & langkah analisis
 - **Blok**: 4 garis tegak + 1 coretan miring/mendatar yang memotongnya = 5. Itu cara menulis yang wajar, bukan pembatalan; AI diberi tahu aturan ini.
 - **Analisis (berpikir)**: bila lembar tercatat dengan peringatan selisih (⚠️), AI melakukan satu langkah penalaran tambahan (Gemini, teks saja) lalu menambahkan SATU baris "💡 …" berisi dugaan penyebab paling masuk akal. Balasan sengaja singkat: keraguan baca tidak ditampilkan di grup (tersimpan di database). Hanya saran: tidak mengubah data. Bila gagal, balasan asli tetap dikirim tanpa analisis.
+
+## Format balasan lembar (ringkas, kesimpulan saja)
+`✅ Lembar <tanggal> tercatat.` → `Pemasukan: <total> (Cash · QRIS · Online)` → `Pengeluaran: <total>` (belanja unik + fee, tanpa dobel) → `⚠️` selisih kas/QRIS bila ada → `💡` satu baris dugaan penyebab bila ada. Rincian belanja, potongan karyawan, keraguan baca ada di dashboard/database, tidak di grup.

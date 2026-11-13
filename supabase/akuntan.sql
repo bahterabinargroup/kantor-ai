@@ -467,7 +467,7 @@ declare
   v_cash numeric; v_qris numeric; v_online numeric; v_missing_all text; v_missing_cash text; v_missing_qris text;
   v_belanja numeric; v_modal int; v_last_cash int; v_qris_written int; v_exp numeric;
   v_flags jsonb := '[]'::jsonb; v_unc text; v_unknown text; v_disc int; v_reply text;
-  v_check text[] := '{}'; v_dupn int := 0; v_dupnote text := '';
+  v_check text[] := '{}'; v_dupn int := 0; v_dupnote text := ''; v_out numeric; v_warn text;
   v_plastik int := 0; v_res jsonb; v_stf text; v_stf_bad text;
   -- pengeluaran
   e jsonb; v_amount int; v_item text; v_edate date; v_total int; v_rows int; v_id bigint; v_has_media boolean := false;
@@ -695,9 +695,7 @@ begin
         v_check := array_append(v_check, ('Cash akhir cocok ✓')::text);
       else
         v_check := array_append(v_check, (('⚠️ Cash akhir tertulis ' || public.akun_rp(v_last_cash) || ', hitungan ' || public.akun_rp(v_exp)
-                               || ' (modal ' || public.akun_rp(v_modal) || ' + tunai ' || public.akun_rp(v_cash)
-                               || case when v_plastik > 0 then ' + plastik ' || public.akun_rp(v_plastik) else '' end
-                               || ' − belanja ' || public.akun_rp(v_belanja) || ')'))::text);
+                               || ' (selisih ' || public.akun_rp(abs(v_last_cash - round(v_exp))) || ')'))::text);
         v_flags := v_flags || to_jsonb('selisih cash akhir ' || public.akun_rp(v_last_cash - v_exp));
       end if;
     end if;
@@ -723,23 +721,16 @@ begin
     if v_dupn > 0 then
       v_dupnote := E'\n🔗 ' || v_dupn || ' belanja sama dengan laporan teks, dihitung sekali.';
     end if;
+    -- Balasan ringkas: kesimpulan saja (pemasukan, pengeluaran, peringatan selisih). Rincian ada di dashboard.
+    select coalesce(sum(amount), 0) into v_out from public.akun_expenses
+     where expense_date = v_date and (origin = 'laporan' or (origin = 'lembar' and dup_of is null));
     v_reply := '✅ Lembar ' || public.akun_tgl(v_date) || ' tercatat' ||
                case when v_replaced then ' (menggantikan kiriman sebelumnya)' else '' end || E'.\n' ||
-               'Penjualan: Cash ' || public.akun_rp(v_cash) || ' · QRIS ' || public.akun_rp(v_qris) ||
-               ' · Online ' || public.akun_rp(v_online) || E'\n' ||
-               'Belanja di lembar: ' || public.akun_rp(v_belanja) ||
-               case when v_plastik > 0 then E'\nUang plastik dipakai untuk kembalian: ' || public.akun_rp(v_plastik) || ' (bukan belanja)' else '' end ||
-               case when v_stf is not null then E'\nPotongan karyawan dicatat: ' || v_stf else '' end ||
-               case when v_stf_bad is not null then E'\n❓ Fee/bon tanpa nama karyawan yang dikenal: ' || v_stf_bad else '' end || v_datenote || coalesce(v_dupnote, '');
-    if cardinality(v_check) > 0 then
-      v_reply := v_reply || E'\n' || array_to_string(v_check, E'\n');
-    end if;
-    if v_missing_all is not null then
-      v_reply := v_reply || E'\nHarga belum ada, belum dihitung: ' || v_missing_all;
-    end if;
-    if v_unknown is not null then
-      v_reply := v_reply || E'\nMenu tidak dikenal: ' || v_unknown;
-    end if;
+               'Pemasukan: ' || public.akun_rp(v_cash + v_qris + v_online) ||
+               ' (Cash ' || public.akun_rp(v_cash) || ' · QRIS ' || public.akun_rp(v_qris) || ' · Online ' || public.akun_rp(v_online) || E')\n' ||
+               'Pengeluaran: ' || public.akun_rp(v_out);
+    select string_agg(c, E'\n') into v_warn from unnest(v_check) c where c like '⚠️%';
+    if v_warn is not null then v_reply := v_reply || E'\n' || v_warn; end if;
     -- keraguan baca (uncertain) TIDAK ditampilkan di grup supaya balasan singkat; tetap tersimpan di akun_sheets.raw
     return jsonb_build_object('reply', v_reply, 'sheet_id', v_sheet, 'flags', v_flags);
   end if;
