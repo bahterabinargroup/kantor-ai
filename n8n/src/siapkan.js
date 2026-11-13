@@ -212,7 +212,7 @@ if (media && out.mode === 'ditolak') {
       '',
       'Aturan lembar_harian:',
       '- Semua uang dalam rupiah penuh tanpa titik (120.000 jadi 120000; "58k" jadi 58000). "date" dari kolom Hari, Tanggal.',
-      '- Hari ini tanggal ' + wibToday() + ' (WIB). Lembar hampir selalu dikirim pada hari yang sama atau 1-2 hari setelah tanggalnya, jadi tahun pada "date" pasti ' + wibToday().slice(0, 4) + ' dan tanggalnya dekat dengan hari ini. Kalau tulisan hari/tanggal ragu antara beberapa angka (mis. 13 atau 15), pilih yang masuk akal dekat hari ini, dan catat keraguannya di "uncertain".',
+      '- Hari ini tanggal ' + wibToday() + ' (WIB). Lembar hampir selalu dikirim pada hari yang sama atau 1-2 hari setelah tanggalnya, jadi tahun pada "date" pasti ' + wibToday().slice(0, 4) + ' dan tanggalnya dekat dengan hari ini. Kalau tulisan hari/tanggal ragu antara beberapa angka (mis. 13 atau 15), langsung pilih yang paling dekat hari ini (tidak melewati hari ini lebih dari 1 hari) dan JANGAN menulis keraguan tanggal di "uncertain".',
       '- Nama barista (kolom "Nama Barista") hampir pasti salah satu dari: Zhafran, Rafi, Erico, Habib, Farhan. Tulisan tangan sering kurang jelas: pilih nama yang paling mirip dari daftar itu. Nama di luar daftar baru ditulis apa adanya bila jelas berbeda.',
       '- Tiap shift biasanya ditulis dengan warna tinta berbeda. Isi "ink" pada shifts dengan warna tulisan shift itu, dan "ink" pada tiap baris sales dengan warna garis hitung itu. Kalau semuanya satu warna, isi apa adanya.',
       '- sales: satu elemen per menu per kolom (cash/qris/online) per warna tinta. Satu garis tegak = 1; empat garis dengan coretan miring = 5. Garis yang dicoret atau dihapus TIDAK dihitung. Menu tanpa tanda jangan dimasukkan.',
