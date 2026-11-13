@@ -3,7 +3,7 @@
   "name": "sys:ipal-ack",
   "nodes": [
     {
-      "id": "0745e516-a4f4-426b-ac04-4dd8948b58d3",
+      "id": "9705d55c-fffa-51aa-8ceb-a56cf642f513",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "26e94bc4-d4e0-4892-9c72-2759905a1dd6",
+      "id": "069bb4b4-6a27-5987-bb28-a2d497863910",
       "name": "Tiap menit",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -39,7 +39,7 @@
       }
     },
     {
-      "id": "a161b3ae-206e-4a2d-83b3-5e4b39f80bc0",
+      "id": "f2b00cd6-8df9-57af-b436-1b62870295c3",
       "name": "Cek konfirmasi (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -57,10 +57,13 @@
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     },
     {
-      "id": "aa68ba30-25b8-4652-90c1-a393e1ad8c68",
+      "id": "1fc49771-a5c6-5994-8c8d-48998fff5ff5",
       "name": "Ada konfirmasi?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -77,7 +80,7 @@
           },
           "conditions": [
             {
-              "id": "c4a22590-b016-4702-a8f6-7133e5f2d11b",
+              "id": "7105cb84-626d-522c-a5d0-c509d0252185",
               "leftValue": "={{ $json.reply }}",
               "rightValue": "",
               "operator": {
@@ -93,7 +96,7 @@
       }
     },
     {
-      "id": "4beff77e-d6dc-4fde-bbc3-af05cd4ec884",
+      "id": "0313e29b-9720-5f9c-86db-c18a62e10a76",
       "name": "Kirim konfirmasi",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -108,7 +111,10 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chat_id: $env.IPAL_GROUP_JID, text: $json.reply }) }}",
         "options": {}
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     }
   ],
   "connections": {

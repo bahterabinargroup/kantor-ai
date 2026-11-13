@@ -3,7 +3,7 @@
   "name": "00 · Core WA Router",
   "nodes": [
     {
-      "id": "79de49a9-8430-4c3e-8986-82e402242e86",
+      "id": "c95f3f84-0382-55ae-9446-07066e801312",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "d7aecb13-a098-40be-8bf3-b114fca9945d",
+      "id": "92a9be8e-4c0d-51b9-b683-2ebfaea8878a",
       "name": "Webhook WA",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
         0,
         0
       ],
-      "webhookId": "8a0bc57b-4660-4d80-b455-d69bb447c9f9",
+      "webhookId": "5b35dec7-4f40-5b58-a831-87b8bca49a42",
       "parameters": {
         "httpMethod": "POST",
         "path": "wa-incoming",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "a24a8e6a-ddb7-4a3a-9ee8-e1de50d31fe0",
+      "id": "84a9fd75-db20-5a70-9622-418065d9a336",
       "name": "Normalize",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -50,7 +50,7 @@
       }
     },
     {
-      "id": "446956b3-0002-404c-898d-27976b36c0c0",
+      "id": "eed90489-56ac-5bba-97b1-5c16c819f09b",
       "name": "Dispatch (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -68,10 +68,13 @@
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     },
     {
-      "id": "6dfdba2f-37fe-40bb-a3c3-b0235f60fc78",
+      "id": "477765c3-5cc4-58ac-b55b-509a335966d9",
       "name": "Ada tugas?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -88,7 +91,7 @@
           },
           "conditions": [
             {
-              "id": "b95d226c-3d22-48db-bb58-12684ba35d42",
+              "id": "e5d6e855-7bfa-51b8-a12a-839ca72c26e3",
               "leftValue": "={{ $json.task_id }}",
               "rightValue": "",
               "operator": {
@@ -104,7 +107,7 @@
       }
     },
     {
-      "id": "b30ffe43-4356-4723-acd8-51a4b6879ca6",
+      "id": "b9466648-b356-521d-b70c-b085e7736084",
       "name": "Build payload agen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -118,7 +121,7 @@
       }
     },
     {
-      "id": "dc72fa0c-2ad6-4267-b58d-bccf317bcde4",
+      "id": "7a3727b2-c45a-5b21-bb24-ca863190cb01",
       "name": "Panggil agen",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -134,10 +137,13 @@
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {}
       },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000,
       "onError": "continueErrorOutput"
     },
     {
-      "id": "2c602c02-c659-4961-b88e-adaa393e060b",
+      "id": "d259d11f-408d-5ccd-8522-6a70d7da30b2",
       "name": "Tandai tugas gagal",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -155,16 +161,52 @@
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
+    },
+    {
+      "id": "ffab28c5-6bf3-5ccd-a7cc-c47de4b5bd42",
+      "name": "Chat pribadi?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        40
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "712fda57-0928-57ce-a3e9-fb3b7098624b",
+              "leftValue": "={{ $('Normalize').first().json.is_group ? '' : 'x' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       }
     },
     {
-      "id": "7464a0a5-07a1-4c21-8448-9e22dbffcbda",
+      "id": "c77af4f5-b4e0-5089-9907-9507271ffbda",
       "name": "Beri tahu gagal",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1680,
-        40
+        1920,
+        20
       ],
       "parameters": {
         "method": "POST",
@@ -173,10 +215,13 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chat_id: $('Normalize').first().json.chat_id, text: '⚠️ Agen ' + $('Build payload agen').first().json.agent_id + ' belum aktif. Hubungi admin.' }) }}",
         "options": {}
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     },
     {
-      "id": "66512ae0-2cd0-412c-a198-1ec0ae59b05e",
+      "id": "c65f6e6b-3575-5e36-bf0f-ab9e6d917487",
       "name": "Ada balasan?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -193,7 +238,7 @@
           },
           "conditions": [
             {
-              "id": "1789f0be-3cb0-4c08-8ade-588a93f52203",
+              "id": "c348b70d-68ba-5b02-b199-61af4eb6bdae",
               "leftValue": "={{ $json.reply }}",
               "rightValue": "",
               "operator": {
@@ -209,7 +254,7 @@
       }
     },
     {
-      "id": "625b45e3-6275-43b2-ac3a-8ac5add52f94",
+      "id": "b3dd90d3-28e5-524d-ab76-4fa8430b0cff",
       "name": "Kirim balasan",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -224,7 +269,10 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chat_id: $('Normalize').first().json.chat_id, text: $json.reply }) }}",
         "options": {}
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     }
   ],
   "connections": {
@@ -303,6 +351,17 @@
       ]
     },
     "Tandai tugas gagal": {
+      "main": [
+        [
+          {
+            "node": "Chat pribadi?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat pribadi?": {
       "main": [
         [
           {

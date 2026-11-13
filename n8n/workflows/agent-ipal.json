@@ -3,7 +3,7 @@
   "name": "agent:ipal",
   "nodes": [
     {
-      "id": "f9eeccad-ea31-4433-96c2-e165b48b8aca",
+      "id": "916a22de-78a8-5665-9323-7f280246dbaa",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "71f9d1c3-69a1-4168-a1ca-9895f9294211",
+      "id": "461d844b-b42e-518d-a95f-93696ce34f05",
       "name": "Webhook agen",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
         0,
         0
       ],
-      "webhookId": "c0ccbfd7-e387-468f-be07-8f5f2b966448",
+      "webhookId": "9e661716-e0cc-5e7a-87c4-7608876a1e03",
       "parameters": {
         "httpMethod": "POST",
         "path": "agent-ipal",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "3dd899c0-fb71-4743-a84e-fc474fba07a4",
+      "id": "ec541fe3-1865-5b09-856b-db8cc542b293",
       "name": "Status: kerja",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -51,10 +51,13 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ agent_id: 'ipal', status: 'working', detail: 'Mencatat laporan dapur', task_id: $json.body.task_id }) }}",
         "options": {}
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     },
     {
-      "id": "fb38e218-a12e-4fb1-8760-5a13aea728c0",
+      "id": "0c179306-31e0-589d-8fc3-183dd6438bc2",
       "name": "Siapkan data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -68,7 +71,7 @@
       }
     },
     {
-      "id": "3a4ccd22-9681-421d-ae40-9c03ad19123b",
+      "id": "72d03fda-3608-5ab6-8666-ba705a877a11",
       "name": "Catat laporan (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -86,10 +89,13 @@
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     },
     {
-      "id": "1464f4c8-f77d-4590-97cd-c537cdcd8fa6",
+      "id": "c5eda53c-3606-5527-b468-d653c1f1ef5a",
       "name": "Susun balasan",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -103,7 +109,7 @@
       }
     },
     {
-      "id": "f13a9bea-7e3b-4afd-a4d0-9f57ae70baec",
+      "id": "f9a5d1fa-130c-50b6-9c71-4242f8d4caef",
       "name": "Ada balasan?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -120,7 +126,7 @@
           },
           "conditions": [
             {
-              "id": "1b84c26e-6159-4c6a-b611-8d79b6c51091",
+              "id": "caf4d092-ec71-5ce2-94b9-dca3b556ce68",
               "leftValue": "={{ $json.reply }}",
               "rightValue": "",
               "operator": {
@@ -136,7 +142,7 @@
       }
     },
     {
-      "id": "29d40ad9-40c1-453a-a4ec-4344591bdfe7",
+      "id": "accd5ae9-78a3-5c12-8e32-8dca18699605",
       "name": "Balas ke grup",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -151,10 +157,13 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.reply }) }}",
         "options": {}
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     },
     {
-      "id": "24645c92-974e-49b1-ae4d-405da319c8f6",
+      "id": "e43a996b-a0cc-5bba-a32a-9bc36004b47b",
       "name": "Tutup tugas",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -172,10 +181,13 @@
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     },
     {
-      "id": "85ef16cf-df05-4302-a3eb-acd735748b98",
+      "id": "5567ac50-14f8-5e81-a093-cbd846f7e3c6",
       "name": "Status: santai",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -190,7 +202,10 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ agent_id: 'ipal', status: 'idle', detail: 'Selesai' }) }}",
         "options": {}
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     }
   ],
   "connections": {

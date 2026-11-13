@@ -3,7 +3,7 @@
   "name": "sys:ipal-reminder",
   "nodes": [
     {
-      "id": "23bfc799-66a0-4abe-9058-f2ec6eea7155",
+      "id": "4d5e5594-c946-5ef0-9f81-e36286101cdc",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "aa06ae36-c9c1-419b-86f0-bdf832136e5c",
+      "id": "00971c91-6a2e-5fa9-b47c-0395b1d8f2e7",
       "name": "17:00 WIB",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -39,7 +39,7 @@
       }
     },
     {
-      "id": "0cf0920a-77f9-4cab-955e-d5d76829faa4",
+      "id": "05368b2c-89bc-520a-bccd-226f65ef2c89",
       "name": "06:00 WIB",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -59,7 +59,7 @@
       }
     },
     {
-      "id": "c9de5e5b-d647-49f3-acd6-4f6daf97ac2c",
+      "id": "57f6af87-e0ab-5dfa-a2dd-360f70258b4f",
       "name": "Belum lapor hari ini (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -77,10 +77,13 @@
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     },
     {
-      "id": "2437074f-7543-4f9a-9761-d7ef018b7d76",
+      "id": "9622e544-bfa6-5e43-ab31-7565e070a393",
       "name": "Belum lapor kemarin (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -98,10 +101,13 @@
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     },
     {
-      "id": "47133f50-028d-47e4-86f5-c0531950f110",
+      "id": "eaf3083c-a2ad-5f8e-a9a1-5ae21bcfd32c",
       "name": "Ada yang belum?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -118,7 +124,7 @@
           },
           "conditions": [
             {
-              "id": "723074ee-6f97-447b-a2bc-4e7b10911701",
+              "id": "88454962-b1e3-5588-913e-af93d4e8b372",
               "leftValue": "={{ $json.reply }}",
               "rightValue": "",
               "operator": {
@@ -134,7 +140,7 @@
       }
     },
     {
-      "id": "28ba4907-fe91-4179-a920-91a8dca399f9",
+      "id": "4df6fbde-39be-59af-9b04-edba9ea1feaf",
       "name": "Kirim pengingat",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -149,7 +155,10 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chat_id: $env.IPAL_GROUP_JID, text: $json.reply }) }}",
         "options": {}
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     }
   ],
   "connections": {

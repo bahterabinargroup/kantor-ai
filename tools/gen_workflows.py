@@ -34,7 +34,9 @@ def http(name, url, body_expr, pos, headers=None, error_output=False):
         params["sendHeaders"] = True
         params["headerParameters"] = headers
     n = {"id": nid(), "name": name, "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2,
-         "position": pos, "parameters": params}
+         "position": pos, "parameters": params,
+         # webhook/RPC kadang belum siap beberapa detik setelah n8n restart → coba ulang, jangan langsung gagal
+         "retryOnFail": True, "maxTries": 5, "waitBetweenTries": 8000}
     if error_output:
         n["onError"] = "continueErrorOutput"
     return n
@@ -81,6 +83,23 @@ def workflow(fname, name, nodes, links):
     # ID tetap → skrip bisa mengaktifkan per-ID (n8n 2.x tidak punya --all) dan
     # semua workflow otomatis memakai sys:error-handler (tanpa langkah manual).
     wid = "kai_" + fname[:-5].replace("-", "_")
+    # id node/webhook deterministik → file hanya berubah kalau isinya benar-benar berubah
+    # (deploy otomatis lalu tidak perlu restart n8n bila workflow tidak berubah)
+    for nd in nodes:
+        nd["id"] = str(uuid.uuid5(uuid.NAMESPACE_URL, "kantor-ai/" + fname + "/" + nd["name"]))
+        def _norm(o, path):
+            if isinstance(o, dict):
+                for k, v in o.items():
+                    if k == "id" and isinstance(v, str) and len(v) == 36:
+                        o[k] = str(uuid.uuid5(uuid.NAMESPACE_URL, "kantor-ai/in/" + fname + "/" + nd["name"] + "/" + path))
+                    else:
+                        _norm(v, path + "." + k)
+            elif isinstance(o, list):
+                for i, v in enumerate(o):
+                    _norm(v, path + "[" + str(i) + "]")
+        _norm(nd.get("parameters", {}), "p")
+        if "webhookId" in nd:
+            nd["webhookId"] = str(uuid.uuid5(uuid.NAMESPACE_URL, "kantor-ai/wh/" + fname + "/" + nd["name"]))
     settings = {"executionOrder": "v1"}
     if wid != ERR_ID:
         settings["errorWorkflow"] = ERR_ID
@@ -183,10 +202,11 @@ core_nodes = [
     rpc("Tandai tugas gagal", "finish_task",
         "={{ JSON.stringify({ p_task_id: $('Build payload agen').first().json.task_id, p_status: 'failed', "
         "p_error: 'workflow agen tidak merespons (belum aktif?)' }) }}", [1440, 40]),
+    if_not_empty("Chat pribadi?", "={{ $('Normalize').first().json.is_group ? '' : 'x' }}", [1680, 40]),
     http("Beri tahu gagal", N8N + "lib-send-wa",
          "={{ JSON.stringify({ chat_id: $('Normalize').first().json.chat_id, "
          "text: '⚠️ Agen ' + $('Build payload agen').first().json.agent_id + ' belum aktif. Hubungi admin.' }) }}",
-         [1680, 40]),
+         [1920, 20]),
     if_not_empty("Ada balasan?", "={{ $json.reply }}", [960, 120]),
     http("Kirim balasan", N8N + "lib-send-wa",
          "={{ JSON.stringify({ chat_id: $('Normalize').first().json.chat_id, text: $json.reply }) }}",
@@ -197,7 +217,7 @@ core_links = [
     link("Dispatch (RPC)", "Ada tugas?"),
     link("Ada tugas?", "Build payload agen", 0), link("Ada tugas?", "Ada balasan?", 1),
     link("Build payload agen", "Panggil agen"),
-    link("Panggil agen", "Tandai tugas gagal", 1), link("Tandai tugas gagal", "Beri tahu gagal"),
+    link("Panggil agen", "Tandai tugas gagal", 1), link("Tandai tugas gagal", "Chat pribadi?"), link("Chat pribadi?", "Beri tahu gagal", 0),
     link("Ada balasan?", "Kirim balasan", 0),
 ]
 workflow("00-core-wa-router.json", "00 · Core WA Router", core_nodes, core_links)

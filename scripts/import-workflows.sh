@@ -4,6 +4,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Lewati kalau isi workflow tidak berubah sejak impor terakhir (impor = restart n8n = ±1 menit tidak bisa
+# menerima pesan WhatsApp). Paksa dengan: FORCE=1 ./scripts/import-workflows.sh
+HASHFILE=".workflows.sha"
+NEWHASH="$(cat n8n/workflows/*.json | sha256sum | cut -d' ' -f1)"
+if [ "${FORCE:-}" != "1" ] && [ -f "$HASHFILE" ] && [ "$(cat "$HASHFILE")" = "$NEWHASH" ]; then
+  echo "Workflow tidak berubah — impor & restart n8n dilewati."
+  exit 0
+fi
+
 echo "── Impor workflow ──"
 docker compose exec -T n8n n8n import:workflow --separate --input=/workflows
 
@@ -26,6 +35,8 @@ done
 
 echo "── Restart n8n agar webhook terdaftar ──"
 docker compose restart n8n
+
+[ "${#FAILED[@]}" -eq 0 ] && echo "$NEWHASH" > "$HASHFILE"
 
 if [ "${#FAILED[@]}" -gt 0 ]; then
   echo

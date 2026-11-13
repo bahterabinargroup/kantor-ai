@@ -3,7 +3,7 @@
   "name": "sys:housekeeping",
   "nodes": [
     {
-      "id": "da884c35-ec78-4391-b5ce-70c1849ccef8",
+      "id": "bed37ff1-daf9-59ea-a3ba-4eafa2feef5c",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "2a07ab9e-d490-47e7-9258-6ac75fbd8e82",
+      "id": "bae5e221-190a-5c41-94bd-5509feeeb896",
       "name": "Tiap 10 menit",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -39,7 +39,7 @@
       }
     },
     {
-      "id": "5c35d56d-7614-4f54-9c28-79b7bf8aa170",
+      "id": "beea32a2-370e-5cc1-8d9c-885d285b7162",
       "name": "Housekeeping (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -57,7 +57,10 @@
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     }
   ],
   "connections": {

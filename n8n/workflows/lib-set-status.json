@@ -3,7 +3,7 @@
   "name": "lib:set-status",
   "nodes": [
     {
-      "id": "578e6b1b-218f-409c-a75d-95b60846782f",
+      "id": "23676095-860e-5eea-8908-f2a0c70e531f",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "6d05908f-220d-4e64-899b-ed5ffba181dc",
+      "id": "d031a5c7-0bef-55c9-bc46-30bcb78a78e3",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
         0,
         0
       ],
-      "webhookId": "77b7b8d6-276d-4877-be24-6a2063f7f65d",
+      "webhookId": "abf71891-4500-5ddc-86fd-f00609f066fd",
       "parameters": {
         "httpMethod": "POST",
         "path": "lib-set-status",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "306d6cc0-46cd-4de3-920b-f9be7ae615c5",
+      "id": "fe2198f4-6a05-5efe-a15e-8701a4841bc8",
       "name": "Set status (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -54,7 +54,10 @@
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     }
   ],
   "connections": {

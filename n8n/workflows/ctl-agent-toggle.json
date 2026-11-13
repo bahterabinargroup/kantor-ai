@@ -3,7 +3,7 @@
   "name": "ctl:agent-toggle",
   "nodes": [
     {
-      "id": "18a7e7f6-49f9-45ad-aaef-bbccd7616f38",
+      "id": "656813a4-4cb6-57a5-9e40-4b016f3ca733",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "b97bbe00-5925-4d6f-a1d5-1cb53671ca83",
+      "id": "6770f3d9-0f07-5bf5-a57c-3ba0701ccd06",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
         0,
         0
       ],
-      "webhookId": "8f8d96ce-6ca3-4480-9b8e-f11c62a90899",
+      "webhookId": "e141c1a4-43fd-55de-83b4-e44c49095f9f",
       "parameters": {
         "httpMethod": "POST",
         "path": "ctl-agent-toggle",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "ddc5cedd-abb9-42de-a379-4d05068523f1",
+      "id": "da75f629-121a-5ec8-969a-0afc3afb1ce4",
       "name": "Nyalakan/matikan (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -54,7 +54,10 @@
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     }
   ],
   "connections": {

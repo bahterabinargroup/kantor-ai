@@ -3,7 +3,7 @@
   "name": "ctl:agent-profile",
   "nodes": [
     {
-      "id": "de98262e-2a73-418d-a350-697006124fb1",
+      "id": "9c0d16ef-bf28-5cc0-add9-8460dd01c1d1",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "6d77729c-a2a2-4c05-93e7-e329d16e333c",
+      "id": "b7eb655e-5fcf-506e-a523-05b728ecc577",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -27,7 +27,7 @@
         0,
         0
       ],
-      "webhookId": "cc60dcd9-7bfb-4235-948e-3073998610da",
+      "webhookId": "ec1e5bd2-44c0-561c-b439-ceafff9464bf",
       "parameters": {
         "httpMethod": "POST",
         "path": "ctl-agent-profile",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "id": "546fa844-cb46-4482-ba4a-8c2f51e1f787",
+      "id": "dda21e44-b6fd-58fa-86cd-f955edda1127",
       "name": "Ubah profil (RPC)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -54,7 +54,10 @@
         "sendHeaders": true,
         "specifyHeaders": "json",
         "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     }
   ],
   "connections": {

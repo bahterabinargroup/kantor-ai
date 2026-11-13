@@ -3,7 +3,7 @@
   "name": "sys:error-handler",
   "nodes": [
     {
-      "id": "91d8be9e-b8b2-44a6-ac43-5b336b4d37d2",
+      "id": "c457845c-e017-5d43-966b-4da4a92593b9",
       "name": "Catatan 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -19,7 +19,7 @@
       }
     },
     {
-      "id": "1a3885b1-fa5a-4dbc-a2d0-4b18cd95d91c",
+      "id": "b1f4d308-86ef-5bee-b1d7-ed28020bc943",
       "name": "Error Trigger",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
@@ -30,7 +30,7 @@
       "parameters": {}
     },
     {
-      "id": "f8e4edb5-a76b-4637-b861-d6c3625b1391",
+      "id": "3ac67bcc-c3ba-5683-96c1-5c0185408c9a",
       "name": "Petakan ke agen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -44,7 +44,7 @@
       }
     },
     {
-      "id": "9b657878-c4fb-4c31-ab6f-37e284897933",
+      "id": "a8d54167-4101-509d-96df-560aa6aa3eaf",
       "name": "Status: macet",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -59,7 +59,10 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ agent_id: $json.agent_id, status: 'blocked', detail: $json.detail }) }}",
         "options": {}
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 8000
     }
   ],
   "connections": {
