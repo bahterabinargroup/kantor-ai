@@ -422,6 +422,21 @@ workflow("sys-ipal-ack.json", "sys:ipal-ack", [
     link("Ada konfirmasi?", "Kirim konfirmasi", 0)])
 
 
+# ───────────────────────── sys:outbox ─────────────────────────
+workflow("sys-outbox.json", "sys:outbox", [
+    note("Tiap menit: kirim pesan yang antre di tabel wa_outbox ke WhatsApp lewat bot. "
+         "Untuk mengirim pesan dari mana pun: INSERT (chat_id, text) ke wa_outbox.",
+         [0, -180], 480, 100),
+    {"id": nid(), "name": "Tiap menit", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2,
+     "position": [0, 0], "parameters": {"rule": {"interval": [{"field": "minutes", "minutesInterval": 1}]}}},
+    rpc("Ambil pesan antre (RPC)", "outbox_claim", "={{ JSON.stringify({ p_limit: 5 }) }}", [260, 0]),
+    if_not_empty("Ada pesan?", "={{ $json.chat_id }}", [520, 0]),
+    http("Kirim pesan", N8N + "lib-send-wa",
+         "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.text }) }}", [780, -60]),
+], [link("Tiap menit", "Ambil pesan antre (RPC)"), link("Ambil pesan antre (RPC)", "Ada pesan?"),
+    link("Ada pesan?", "Kirim pesan", 0)])
+
+
 # ───────────────────────── ctl:agent-toggle (tombol dashboard) ─────────────────────────
 workflow("ctl-agent-toggle.json", "ctl:agent-toggle", [
     note("Dipanggil tombol Nyala/Mati di dashboard (POST /api/agent-toggle → Caddy → webhook ini).\n"
