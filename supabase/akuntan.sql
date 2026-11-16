@@ -401,6 +401,30 @@ begin
       v_n := v_n + 1;
     end if;
   end loop;
+  -- Putaran 2: baris lembar yang cuma SEBAGIAN dari satu laporan (mis. lembar "Galon 10.000" = bagian
+  -- "uang berdi (10k)" dari laporan galon 132k). Syarat: nama barang beririsan, nominal lembar disebut di
+  -- sumber uang laporan (10k / 10.000 / 10000), dan jumlah bagian tidak melebihi nominal laporan.
+  for l in select id, item, amount from public.akun_expenses
+            where origin = 'lembar' and expense_date = p_date and amount > 0 and dup_of is null order by id loop
+    v_best := null; v_score := 0;
+    for t in select e.id, e.item from public.akun_expenses e
+              where e.origin = 'laporan' and e.expense_date = p_date and e.amount > l.amount
+                and coalesce(e.source_raw,'') <> ''
+                and (   (l.amount % 1000 = 0 and lower(e.source_raw) ~ ('(^|[^0-9.,])' || (l.amount/1000)::text || '\s*(k|rb|ribu)'))
+                     or position(l.amount::text in regexp_replace(e.source_raw, '[.,]', '', 'g')) > 0)
+                and e.amount >= l.amount + coalesce((select sum(x.amount) from public.akun_expenses x where x.dup_of = e.id), 0)
+              order by e.id loop
+      v_s := 0;
+      for tok in select w from regexp_split_to_table(lower(l.item), '[^a-z0-9]+') w where length(w) >= 3 loop
+        if position(tok in lower(t.item)) > 0 then v_s := v_s + 1; end if;
+      end loop;
+      if v_s > v_score then v_score := v_s; v_best := t.id; end if;
+    end loop;
+    if v_best is not null then
+      update public.akun_expenses set dup_of = v_best where id = l.id;
+      v_n := v_n + 1;
+    end if;
+  end loop;
   return v_n;
 end $$;
 
