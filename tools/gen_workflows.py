@@ -372,13 +372,13 @@ workflow("agent-ipal.json", "agent:ipal", ipal_nodes, ipal_links)
 # ───────────────────────── sys:ipal-reminder ─────────────────────────
 workflow("sys-ipal-reminder.json", "sys:ipal-reminder", [
     note("Dua pengingat ke grup (IPAL_GROUP_JID di .env):\n"
-         "• 17:00 WIB: dapur yang BELUM lapor hari ini.\n"
-         "• 06:00 WIB: dapur yang KEMARIN tidak lapor sama sekali.\n"
+         "• 17:00 WIB (Senin–Jumat): dapur yang BELUM lapor hari ini.\n"
+         "• 06:00 WIB (Selasa–Sabtu): dapur yang KEMARIN tidak lapor sama sekali.\n"
          "Semua sudah lapor → tidak kirim apa-apa.", [0, -220], 460, 130),
     {"id": nid(), "name": "17:00 WIB", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2,
-     "position": [0, 0], "parameters": {"rule": {"interval": [{"field": "cronExpression", "expression": "0 17 * * *"}]}}},
+     "position": [0, 0], "parameters": {"rule": {"interval": [{"field": "cronExpression", "expression": "0 17 * * 1-5"}]}}},
     {"id": nid(), "name": "06:00 WIB", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2,
-     "position": [0, 220], "parameters": {"rule": {"interval": [{"field": "cronExpression", "expression": "0 6 * * *"}]}}},
+     "position": [0, 220], "parameters": {"rule": {"interval": [{"field": "cronExpression", "expression": "0 6 * * 2-6"}]}}},
     rpc("Belum lapor hari ini (RPC)", "ipal_pending_today", "={{ JSON.stringify({}) }}", [260, 0]),
     rpc("Belum lapor kemarin (RPC)", "ipal_pending_yesterday", "={{ JSON.stringify({}) }}", [260, 220]),
     if_not_empty("Ada yang belum?", "={{ $json.reply }}", [540, 100]),

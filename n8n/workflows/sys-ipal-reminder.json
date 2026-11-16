@@ -12,7 +12,7 @@
         -220
       ],
       "parameters": {
-        "content": "Dua pengingat ke grup (IPAL_GROUP_JID di .env):\n• 17:00 WIB: dapur yang BELUM lapor hari ini.\n• 06:00 WIB: dapur yang KEMARIN tidak lapor sama sekali.\nSemua sudah lapor → tidak kirim apa-apa.",
+        "content": "Dua pengingat ke grup (IPAL_GROUP_JID di .env):\n• 17:00 WIB (Senin–Jumat): dapur yang BELUM lapor hari ini.\n• 06:00 WIB (Selasa–Sabtu): dapur yang KEMARIN tidak lapor sama sekali.\nSemua sudah lapor → tidak kirim apa-apa.",
         "width": 460,
         "height": 130,
         "color": 4
@@ -32,7 +32,7 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 17 * * *"
+              "expression": "0 17 * * 1-5"
             }
           ]
         }
@@ -52,7 +52,7 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 6 * * *"
+              "expression": "0 6 * * 2-6"
             }
           ]
         }
