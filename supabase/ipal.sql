@@ -222,7 +222,7 @@ language sql stable as $$
 $$;
 
 -- Teks pengingat siap kirim. Kalau semua sudah lapor: reply = null (jangan kirim apa-apa).
-create or replace function public.ipal_pending_today(p_require_media boolean default true)
+create or replace function public.ipal_pending_today_core(p_require_media boolean default true)
 returns jsonb
 language sql stable as $$
   with s as (select * from public.ipal_status_today(p_require_media))
@@ -240,7 +240,7 @@ language sql stable as $$
 $$;
 
 -- Pengingat pagi (06:00 WIB): dapur yang KEMARIN tidak melapor sama sekali (laporan sampai 23:59 dihitung).
-create or replace function public.ipal_pending_yesterday(p_require_media boolean default true)
+create or replace function public.ipal_pending_yesterday_core(p_require_media boolean default true)
 returns jsonb
 language sql stable as $$
   with d as (select ((now() at time zone 'Asia/Jakarta')::date - 1) as day),
@@ -258,6 +258,104 @@ language sql stable as $$
                end
   );
 $$;
+
+-- ── Cek silang sebelum pengingat ────────────────────────────────────
+-- Pesan yang SUDAH diterima bot (ada tugasnya di tabel tasks) tapi tugasnya gagal/macet, mis. n8n sedang
+-- restart, diputar ulang lewat ipal_record_report. Hasil: baris "✅ Laporan IPAL <nama> tercatat." untuk dapur yang
+-- BARU tercatat karenanya (null kalau tidak ada). Pesan yang tidak pernah sampai ke bot tidak bisa dipulihkan di sini.
+create or replace function public.ipal_reconcile(p_day date)
+returns text[]
+language plpgsql
+set search_path = public, extensions
+as $$
+declare
+  t record;
+  v_text text; v_media boolean; v_words int;
+  v_ids text[] := '{}';
+  v_before text[]; v_after text[];
+  v_lines text[];
+begin
+  if not coalesce((select enabled from public.agents where id = 'ipal'), false) then return null; end if;
+  select coalesce(array_agg(s.kitchen_id), '{}') into v_before from public.ipal_status_day(p_day, true) s where s.sudah;
+  for t in
+    select * from public.tasks
+     where agent_id = 'ipal' and source = 'whatsapp'
+       and status in ('queued', 'running', 'failed')
+       and created_at < now() - interval '3 minutes'
+       and (created_at at time zone 'Asia/Jakarta')::date = p_day
+     order by created_at
+  loop
+    if t.source_ref is not null
+       and not exists (select 1 from public.ipal_reports r where r.message_id = t.source_ref) then
+      v_media := coalesce(t.payload->>'mimetype', '') ~ '^(image|video)/'
+              or coalesce(t.payload->>'message_type', '') in ('imageMessage', 'videoMessage');
+      v_text := btrim(coalesce(t.payload->>'text', ''));
+      v_words := coalesce(array_length(regexp_split_to_array(v_text, '\s+'), 1), 0);
+      -- sama seperti penyaring obrolan di agen: teks panjang / pesan pengingat bukan laporan
+      if not v_media and (v_words > 40 or v_text ~* 'pengingat|belum\s+(lapor|report|kirim|setor)|tolong\s+(lapor|kirim)') then
+        v_text := '';
+      end if;
+      perform public.ipal_record_report(t.source_ref, t.chat_id, v_text, v_media, t.payload->>'sender');
+      v_ids := v_ids || t.source_ref;
+    end if;
+    update public.tasks set status = 'done', finished_at = now(),
+           result = jsonb_build_object('reconciled', true)
+     where id = t.id;
+  end loop;
+  -- jam & hari laporan dikembalikan ke waktu pesan aslinya; sudah dikonfirmasi lewat teks pengingat ini
+  update public.ipal_reports r
+     set reported_at = t2.created_at,
+         report_date = (t2.created_at at time zone 'Asia/Jakarta')::date,
+         acked_at = coalesce(r.acked_at, now())
+    from public.tasks t2
+   where t2.agent_id = 'ipal' and t2.source_ref = r.message_id and r.message_id = any(v_ids);
+  select coalesce(array_agg(s.kitchen_id), '{}') into v_after from public.ipal_status_day(p_day, true) s where s.sudah;
+  select array_agg('✅ Laporan IPAL ' || k.name || ' tercatat.' order by k.position)
+    into v_lines
+    from public.ipal_kitchens k
+   where k.id = any(v_after) and not (k.id = any(v_before));
+  return v_lines;
+end $$;
+
+-- Tempelkan konfirmasi "tercatat" di depan teks pengingat (satu pesan, konfirmasi dulu).
+create or replace function public.ipal_prepend_confirmations(p_core jsonb, p_lines text[])
+returns jsonb
+language sql immutable as $$
+  select case when p_lines is null then p_core
+              else jsonb_set(p_core, '{reply}',
+                     to_jsonb(array_to_string(p_lines, E'\n') ||
+                              case when p_core->>'reply' is not null then E'\n\n' || (p_core->>'reply') else '' end))
+         end;
+$$;
+
+create or replace function public.ipal_pending_today(p_require_media boolean default true)
+returns jsonb
+language plpgsql
+set search_path = public, extensions
+as $$
+declare v_lines text[];
+begin
+  begin
+    v_lines := public.ipal_reconcile((now() at time zone 'Asia/Jakarta')::date);
+  exception when others then v_lines := null;   -- cek silang tidak boleh menggagalkan pengingat
+  end;
+  return public.ipal_prepend_confirmations(public.ipal_pending_today_core(p_require_media), v_lines);
+end $$;
+
+create or replace function public.ipal_pending_yesterday(p_require_media boolean default true)
+returns jsonb
+language plpgsql
+set search_path = public, extensions
+as $$
+declare v_lines text[];
+begin
+  begin
+    v_lines := public.ipal_reconcile((now() at time zone 'Asia/Jakarta')::date - 1);
+  exception when others then v_lines := null;
+  end;
+  return public.ipal_prepend_confirmations(public.ipal_pending_yesterday_core(p_require_media), v_lines);
+end $$;
+
 
 -- ── Laporan tidak lengkap ───────────────────────────────────────────
 -- Dipanggil tiap 5 menit. Teks nama dapur tanpa foto, atau foto tanpa nama dapur, yang tetap
@@ -389,7 +487,7 @@ begin
     select p.oid::regprocedure as sig
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
-       and p.proname in ('ipal_match','ipal_record_report','ipal_status_day','ipal_status_today','ipal_pending_today','ipal_pending_yesterday','ipal_incomplete_notices','ipal_pending_acks')
+       and p.proname in ('ipal_match','ipal_record_report','ipal_status_day','ipal_status_today','ipal_pending_today','ipal_pending_yesterday','ipal_pending_today_core','ipal_pending_yesterday_core','ipal_reconcile','ipal_prepend_confirmations','ipal_incomplete_notices','ipal_pending_acks')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
     execute format('grant execute on function %s to service_role', r.sig);
