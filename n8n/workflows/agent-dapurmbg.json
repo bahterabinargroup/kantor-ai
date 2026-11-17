@@ -1,0 +1,297 @@
+{
+  "id": "kai_agent_dapurmbg",
+  "name": "agent:dapurmbg",
+  "nodes": [
+    {
+      "id": "f943b4c6-7e3b-5ade-ba1e-4b79e6a74863",
+      "name": "Catatan 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ],
+      "parameters": {
+        "content": "**Agen Admin Catering** (id `dapurmbg`) — grup WhatsApp \"Makan Makan Sehat\".\nMencatat file (RC 0, PAGU jadi) dan teks di `dm_inbox`, membalas pendek \"File diterima\". Pekerjaan Google (master harga, PDF PAGU) dijalankan lewat sesi Claude dengan skill DAPUR MBG, hasilnya dikirim kembali ke grup lewat `wa_outbox`.\nNama tampil bisa diubah dari dashboard; id teknis tetap `dapurmbg`.",
+        "width": 620,
+        "height": 190,
+        "color": 4
+      }
+    },
+    {
+      "id": "fa06e5eb-cb4d-5ea1-b2d6-26b0c8979fc9",
+      "name": "Webhook agen",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-dapurmbg",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "93e0fc4c-3abf-5292-8e30-dfdf97b09aa2"
+    },
+    {
+      "id": "055f716e-c91f-5f44-99c1-f9bd68e4a4bf",
+      "name": "Status: kerja",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-set-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: 'dapurmbg', status: 'working', detail: 'Mencatat pesan grup', task_id: $json.body.task_id }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "3b55f893-63cf-5f30-8f33-d674482c3e37",
+      "name": "Siapkan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Ambil pesan dari payload agen dan bentuk parameter untuk dm_record.\n// Isi file (base64) hanya dibawa untuk dokumen dan dibatasi ukurannya (8 MB sebelum base64).\nconst p = $('Webhook agen').first().json.body;\nconst MAX_B64 = 11 * 1024 * 1024;\nconst isDoc = /^document/i.test(p.message_type || '') ||\n  /(spreadsheet|excel|csv|pdf|msword|officedocument)/i.test(p.mimetype || '');\nlet b64 = isDoc ? (p.media_base64 || null) : null;\nlet tooBig = false;\nif (b64 && b64.length > MAX_B64) { b64 = null; tooBig = true; }\nreturn [{ json: {\n  task_id: p.task_id, chat_id: p.chat_id, too_big: tooBig,\n  p: {\n    message_id: p.message_id, chat_id: p.chat_id, sender: p.sender, push_name: p.push_name,\n    text: p.raw_text ?? p.text ?? '', message_type: p.message_type, mimetype: p.mimetype,\n    media_base64: b64,\n  },\n} }];\n"
+      }
+    },
+    {
+      "id": "59939680-b58a-58b3-b7ce-9498c74d60c5",
+      "name": "Catat (RPC dm_record)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/dm_record",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p: $json.p }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "26f01a16-e070-5002-b2b2-9f9442a69c8b",
+      "name": "Susun balasan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Susun balasan singkat dari hasil dm_record. Diam kalau tidak ada balasan.\nconst s = $('Siapkan').first().json;\nconst r = Array.isArray($input.first().json) ? $input.first().json[0] : $input.first().json;\nconst res = (r && typeof r === 'object' && 'reply' in r) ? r : (r?.dm_record || r || {});\nlet reply = res.reply || null;\nif (s.too_big) reply = '⚠️ File terlalu besar untuk dicatat (maks sekitar 8 MB). Coba kirim ulang yang lebih kecil.';\nreturn [{ json: { chat_id: s.chat_id, task_id: s.task_id, reply, kind: res.kind || 'text' } }];\n"
+      }
+    },
+    {
+      "id": "d0739a2d-fba3-54d2-bd91-bbf5486496c8",
+      "name": "Ada balasan?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "419ed271-9f75-560b-90d3-8393f39433f6",
+              "leftValue": "={{ $json.reply }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "931fd042-0cc5-5463-b5fa-0c4c58908919",
+      "name": "Balas ke grup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        -80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.reply }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "8f97e4ee-1154-52a5-9159-77cebda40753",
+      "name": "Tutup tugas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/finish_task",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_task_id: $('Susun balasan').first().json.task_id, p_status: 'done', p_result: { kind: $('Susun balasan').first().json.kind } }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "f6074067-b9d4-531e-a6f1-a099c88efd08",
+      "name": "Status: santai",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-set-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: 'dapurmbg', status: 'idle', detail: 'Selesai' }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook agen": {
+      "main": [
+        [
+          {
+            "node": "Status: kerja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status: kerja": {
+      "main": [
+        [
+          {
+            "node": "Siapkan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Siapkan": {
+      "main": [
+        [
+          {
+            "node": "Catat (RPC dm_record)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Catat (RPC dm_record)": {
+      "main": [
+        [
+          {
+            "node": "Susun balasan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Susun balasan": {
+      "main": [
+        [
+          {
+            "node": "Ada balasan?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ada balasan?": {
+      "main": [
+        [
+          {
+            "node": "Balas ke grup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tutup tugas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Balas ke grup": {
+      "main": [
+        [
+          {
+            "node": "Tutup tugas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tutup tugas": {
+      "main": [
+        [
+          {
+            "node": "Status: santai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "kai_sys_error_handler"
+  },
+  "pinData": {}
+}
