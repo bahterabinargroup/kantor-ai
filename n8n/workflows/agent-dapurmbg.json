@@ -63,7 +63,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Ambil pesan dari payload agen dan bentuk parameter untuk dm_record.\n// Isi file (base64) hanya dibawa untuk dokumen dan dibatasi ukurannya (8 MB sebelum base64).\nconst p = $('Webhook agen').first().json.body;\nconst MAX_B64 = 11 * 1024 * 1024;\nconst isDoc = /^document/i.test(p.message_type || '') ||\n  /(spreadsheet|excel|csv|pdf|msword|officedocument)/i.test(p.mimetype || '');\nlet b64 = isDoc ? (p.media_base64 || null) : null;\nlet tooBig = false;\nif (b64 && b64.length > MAX_B64) { b64 = null; tooBig = true; }\nreturn [{ json: {\n  task_id: p.task_id, chat_id: p.chat_id, too_big: tooBig,\n  p: {\n    message_id: p.message_id, chat_id: p.chat_id, sender: p.sender, push_name: p.push_name,\n    text: p.raw_text ?? p.text ?? '', message_type: p.message_type, mimetype: p.mimetype,\n    media_base64: b64,\n  },\n} }];\n"
+        "jsCode": "// Ambil pesan dari payload agen dan bentuk parameter untuk dm_record.\n// Isi file (base64) tidak disimpan di database; hanya file tabel diunggah ke Drive (maks sekitar 8 MB).\nconst p = $('Webhook agen').first().json.body;\nconst MAX_B64 = 11 * 1024 * 1024;\nconst mime = p.mimetype || '';\nconst isDoc = /^document/i.test(p.message_type || '') ||\n  /(spreadsheet|excel|csv|pdf|msword|officedocument)/i.test(mime);\n// Hanya file tabel (xlsx/xls/csv) yang diunggah ke folder \"RC 0\"; PDF dan lainnya hanya dicatat.\nconst isSheet = /(spreadsheet|excel|csv)/i.test(mime);\nconst b64 = isSheet ? (p.media_base64 || null) : null;\nconst tooBig = !!(b64 && b64.length > MAX_B64);\nconst ext = /csv/i.test(mime) ? 'csv' : (/spreadsheetml|openxml/i.test(mime) ? 'xlsx' : 'xls');\n// Nama file tidak dibawa WhatsApp ke sini: pakai keterangan (caption) + waktu WIB.\nconst wib = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ').replace(':', '');\nconst cap = String(p.raw_text ?? p.text ?? '').replace(/[^A-Za-z0-9 _.-]/g, '').trim().slice(0, 40);\nconst fileName = ('RC0 ' + (cap ? cap + ' ' : '') + wib + '.' + ext);\nreturn [{ json: {\n  task_id: p.task_id, chat_id: p.chat_id, too_big: tooBig,\n  upload: !!b64 && !tooBig, b64: tooBig ? null : b64, file_name: fileName, mime,\n  p: {\n    message_id: p.message_id, chat_id: p.chat_id, sender: p.sender, push_name: p.push_name,\n    text: p.raw_text ?? p.text ?? '', message_type: p.message_type, mimetype: p.mimetype,\n  },\n} }];\n"
       }
     },
     {
@@ -88,16 +88,97 @@
       }
     },
     {
-      "id": "26f01a16-e070-5002-b2b2-9f9442a69c8b",
-      "name": "Susun balasan",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "e1754a3b-06c2-56c0-bd62-7bafafd0459e",
+      "name": "Ada file untuk Drive?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
       "position": [
         960,
         0
       ],
       "parameters": {
-        "jsCode": "// Susun balasan singkat dari hasil dm_record. Diam kalau tidak ada balasan.\nconst s = $('Siapkan').first().json;\nconst r = Array.isArray($input.first().json) ? $input.first().json[0] : $input.first().json;\nconst res = (r && typeof r === 'object' && 'reply' in r) ? r : (r?.dm_record || r || {});\nlet reply = res.reply || null;\nif (s.too_big) reply = '⚠️ File terlalu besar untuk dicatat (maks sekitar 8 MB). Coba kirim ulang yang lebih kecil.';\nreturn [{ json: { chat_id: s.chat_id, task_id: s.task_id, reply, kind: res.kind || 'text' } }];\n"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "0d84f100-893f-5cc8-a199-ec379fc4a123",
+              "leftValue": "={{ $json.upload }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "34f93a44-4c30-5f25-9501-9956d92ada86",
+      "name": "Siapkan biner",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        -120
+      ],
+      "parameters": {
+        "jsCode": "// Ubah base64 dari WhatsApp menjadi file biner untuk node Google Drive.\nconst s = $('Siapkan').first().json;\nconst buf = Buffer.from(s.b64, 'base64');\nconst bin = await this.helpers.prepareBinaryData(buf, s.file_name, s.mime);\nreturn [{ json: { file_name: s.file_name }, binary: { data: bin } }];\n"
+      }
+    },
+    {
+      "id": "cbf94b56-cbc5-5f64-8364-b6a9f1302c3b",
+      "name": "Unggah ke Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1440,
+        -120
+      ],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "file",
+        "operation": "upload",
+        "inputDataFieldName": "data",
+        "name": "={{ $json.file_name }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1WEVt0170RsXi3aB-OCrH-DnGExw-LH6T"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "aobybr8432rdzXGw",
+          "name": "Google Drive - Kantor AI"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "26f01a16-e070-5002-b2b2-9f9442a69c8b",
+      "name": "Susun balasan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Susun balasan singkat dari hasil dm_record dan hasil unggah ke Drive. Diam kalau tidak ada balasan.\nconst s = $('Siapkan').first().json;\nconst r = $('Catat (RPC dm_record)').first().json;\nconst res = Array.isArray(r) ? (r[0] || {}) : ((r && 'reply' in r) ? r : (r?.dm_record || r || {}));\nlet reply = res.reply || null;\nif (s.too_big) {\n  reply = '⚠️ File terlalu besar untuk disimpan (maks sekitar 8 MB). Coba kirim ulang yang lebih kecil.';\n} else if (s.upload) {\n  let d = null;\n  try { d = $('Unggah ke Drive').first().json; } catch (e) {}\n  if (d && d.id && !d.error) reply = '✅ File tersimpan di Drive (folder RC 0): ' + s.file_name + '\n' + (res.reply || '');\n  else reply = '⚠️ File diterima tapi gagal disimpan ke Drive. Saya catat dulu, mohon kabari Claude.\n' + (res.reply || '');\n}\nreturn [{ json: { chat_id: s.chat_id, task_id: s.task_id, reply, kind: res.kind || 'text' } }];\n"
       }
     },
     {
@@ -106,7 +187,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1200,
+        1920,
         0
       ],
       "parameters": {
@@ -139,7 +220,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1440,
+        2160,
         -80
       ],
       "parameters": {
@@ -157,7 +238,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1680,
+        2400,
         0
       ],
       "parameters": {
@@ -178,7 +259,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1920,
+        2640,
         0
       ],
       "parameters": {
@@ -226,6 +307,46 @@
       ]
     },
     "Catat (RPC dm_record)": {
+      "main": [
+        [
+          {
+            "node": "Ada file untuk Drive?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ada file untuk Drive?": {
+      "main": [
+        [
+          {
+            "node": "Siapkan biner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Susun balasan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Siapkan biner": {
+      "main": [
+        [
+          {
+            "node": "Unggah ke Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unggah ke Drive": {
       "main": [
         [
           {
