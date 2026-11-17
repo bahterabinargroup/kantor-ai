@@ -100,7 +100,7 @@ nodes = [
  code("Siapkan", [480, 0], SIAPKAN),
  http("Catat (RPC dm_record)", [720, 0], "={{ $env.SUPABASE_URL }}/rest/v1/rpc/dm_record",
       "={{ JSON.stringify({ p: $json.p }) }}", supabase=True),
- if_node("Ada file untuk Drive?", [960, 0], "={{ $json.upload }}", "true", "boolean"),
+ if_node("Ada file untuk Drive?", [960, 0], "={{ $('Siapkan').first().json.upload }}", "true", "boolean"),
  code("Siapkan biner", [1200, -120], BIN),
  node("Unggah ke Drive", "n8n-nodes-base.googleDrive", 3, [1440, -120], {
    "authentication": "serviceAccount", "resource": "file", "operation": "upload",

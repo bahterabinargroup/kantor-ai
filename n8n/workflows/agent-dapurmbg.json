@@ -106,7 +106,7 @@
           "conditions": [
             {
               "id": "0d84f100-893f-5cc8-a199-ec379fc4a123",
-              "leftValue": "={{ $json.upload }}",
+              "leftValue": "={{ $('Siapkan').first().json.upload }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",
