@@ -693,6 +693,10 @@ begin
       end if;
       insert into public.akun_expenses (expense_date, item, amount, origin, sheet_id, message_id, chat_id, sender)
       values (v_date, left(btrim(ex->>'item'), 120), v_amount, 'lembar', v_sheet, v_msg, v_chat, v_sender);
+      -- "uang plastik <barang>" = belanja dibayar dari plastik, bukan dari laci: tetap belanja, tapi kas laci tidak berkurang
+      if public.akun_norm(ex->>'item') ~ 'plas?tik' then
+        v_plastik := v_plastik + v_amount;
+      end if;
     end loop;
 
     -- fee / bon karyawan (untuk potong gaji)
