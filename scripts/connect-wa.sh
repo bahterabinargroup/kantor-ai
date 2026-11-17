@@ -7,12 +7,13 @@ get() { grep -E "^$1=" .env | head -n1 | cut -d= -f2- | sed -e "s/^'//" -e "s/'\
 KEY="$(get EVOLUTION_API_KEY)"
 INSTANCE="$(get EVOLUTION_INSTANCE)"; INSTANCE="${INSTANCE:-kantor-ai}"
 SECRET="$(get WEBHOOK_SECRET)"
-BASE="https://$(get EVOLUTION_DOMAIN)"
+DOMAIN="$(get EVOLUTION_DOMAIN)"
+BASE="https://$DOMAIN"
 # Evolution memanggil n8n lewat jaringan Docker (tidak lewat internet)
 HOOK="http://n8n:5678/webhook/wa-incoming?secret=${SECRET}"
 
 api() { # api METODE PATH [BODY] → cetak "kode_http" di baris terakhir
-  curl -sS -k -X "$1" "$BASE$2" -H "apikey: $KEY" -H "Content-Type: application/json" \
+  curl -sS -k --resolve "$DOMAIN:443:127.0.0.1" -X "$1" "$BASE$2" -H "apikey: $KEY" -H "Content-Type: application/json" \
     ${3:+-d "$3"} -w '\n%{http_code}'
 }
 
