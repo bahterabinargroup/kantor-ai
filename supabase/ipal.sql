@@ -245,6 +245,10 @@ language sql stable as $$
                  '⏰ Pengingat: dapur berikut BELUM melaporkan kebersihan IPAL hari ' || public.ipal_tgl_id((now() at time zone 'Asia/Jakarta')::date) || ':' || E'\n' ||
                  (select string_agg('• ' || name, E'\n' order by name) from s where not sudah) || E'\n\n' ||
                  'Mohon kirim foto + nama dapur di grup ini. Terima kasih 🙏'
+                 when coalesce((select enabled from public.agents where id = 'ipal'), false) then
+                 '✅ Semua dapur (' || (select count(*) from s) || ' dapur) sudah melaporkan kebersihan IPAL hari ' ||
+                 public.ipal_tgl_id((now() at time zone 'Asia/Jakarta')::date) || E'.\n\n' ||
+                 'Terima kasih atas kerjasamanya 🙏'
                end
   );
 $$;
@@ -265,6 +269,10 @@ language sql stable as $$
                  public.ipal_tgl_id((select day from d)) || ':' || E'\n' ||
                  (select string_agg('• ' || name, E'\n' order by name) from s where not sudah) || E'\n\n' ||
                  'Mohon segera kirim laporannya (foto + nama dapur). Terima kasih 🙏'
+                 when coalesce((select enabled from public.agents where id = 'ipal'), false) then
+                 '✅ Semua dapur (' || (select count(*) from s) || ' dapur) sudah melaporkan kebersihan IPAL hari ' ||
+                 public.ipal_tgl_id((select day from d)) || E'.\n\n' ||
+                 'Terima kasih atas kerjasamanya 🙏'
                end
   );
 $$;
