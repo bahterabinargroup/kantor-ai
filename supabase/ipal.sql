@@ -222,6 +222,16 @@ language sql stable as $$
 $$;
 
 -- Teks pengingat siap kirim. Kalau semua sudah lapor: reply = null (jangan kirim apa-apa).
+-- Tanggal berbahasa Indonesia, mis. "Selasa, 17 November 2026"
+create or replace function public.ipal_tgl_id(p_day date)
+returns text
+language sql immutable as $$
+  select (array['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'])[extract(dow from p_day)::int + 1]
+         || ', ' || extract(day from p_day)::int || ' '
+         || (array['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'])[extract(month from p_day)::int]
+         || ' ' || extract(year from p_day)::int;
+$$;
+
 create or replace function public.ipal_pending_today_core(p_require_media boolean default true)
 returns jsonb
 language sql stable as $$
@@ -232,7 +242,7 @@ language sql stable as $$
     'total_n', (select count(*) from s),
     'reply',   case when exists (select 1 from s where not sudah)
                      and coalesce((select enabled from public.agents where id = 'ipal'), false) then
-                 '⏰ Pengingat laporan IPAL: dapur berikut BELUM lapor hari ini:' || E'\n' ||
+                 '⏰ Pengingat: dapur berikut BELUM melaporkan kebersihan IPAL hari ' || public.ipal_tgl_id((now() at time zone 'Asia/Jakarta')::date) || ':' || E'\n' ||
                  (select string_agg('• ' || name, E'\n' order by name) from s where not sudah) || E'\n\n' ||
                  'Mohon kirim foto + nama dapur di grup ini. Terima kasih 🙏'
                end
@@ -251,8 +261,8 @@ language sql stable as $$
     'total_n', (select count(*) from s),
     'reply',   case when exists (select 1 from s where not sudah)
                      and coalesce((select enabled from public.agents where id = 'ipal'), false) then
-                 '🌅 Pengingat pagi: kemarin (' || to_char((select day from d), 'DD/MM') ||
-                 ') dapur berikut BELUM lapor IPAL:' || E'\n' ||
+                 '🌅 Pengingat pagi: dapur berikut BELUM melaporkan kebersihan IPAL hari ' ||
+                 public.ipal_tgl_id((select day from d)) || ':' || E'\n' ||
                  (select string_agg('• ' || name, E'\n' order by name) from s where not sudah) || E'\n\n' ||
                  'Mohon segera kirim laporannya (foto + nama dapur). Terima kasih 🙏'
                end
@@ -487,7 +497,7 @@ begin
     select p.oid::regprocedure as sig
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
-       and p.proname in ('ipal_match','ipal_record_report','ipal_status_day','ipal_status_today','ipal_pending_today','ipal_pending_yesterday','ipal_pending_today_core','ipal_pending_yesterday_core','ipal_reconcile','ipal_prepend_confirmations','ipal_incomplete_notices','ipal_pending_acks')
+       and p.proname in ('ipal_match','ipal_record_report','ipal_status_day','ipal_status_today','ipal_pending_today','ipal_pending_yesterday','ipal_tgl_id','ipal_pending_today_core','ipal_pending_yesterday_core','ipal_reconcile','ipal_prepend_confirmations','ipal_incomplete_notices','ipal_pending_acks')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
     execute format('grant execute on function %s to service_role', r.sig);
