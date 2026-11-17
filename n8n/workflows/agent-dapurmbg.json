@@ -12,7 +12,7 @@
         -320
       ],
       "parameters": {
-        "content": "**Agen Admin Catering** (id `dapurmbg`) — grup WhatsApp \"Makan Makan Sehat\".\nMencatat file (RC 0, PAGU jadi) dan teks di `dm_inbox`, membalas pendek \"File diterima\". Pekerjaan Google (master harga, PDF PAGU) dijalankan lewat sesi Claude dengan skill DAPUR MBG, hasilnya dikirim kembali ke grup lewat `wa_outbox`.\nNama tampil bisa diubah dari dashboard; id teknis tetap `dapurmbg`.",
+        "content": "**Agen Admin Catering** (id `dapurmbg`) — grup WhatsApp \"Makan Makan Sehat\".\nMencatat file (RC 0, PAGU jadi) dan teks di `dm_inbox`, membalas pendek \"File diterima\". Perintah teks (proses, setuju, pdf, minggu baru) menjalankan update harga RC 0 dan PDF PAGU DAPUR langsung dari grup lewat Google Sheets/Drive API.\nNama tampil bisa diubah dari dashboard; id teknis tetap `dapurmbg`.",
         "width": 620,
         "height": 190,
         "color": 4
@@ -63,7 +63,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Ambil pesan dari payload agen dan bentuk parameter untuk dm_record.\n// Isi file (base64) tidak disimpan di database; hanya file tabel diunggah ke Drive (maks sekitar 8 MB).\nconst p = $('Webhook agen').first().json.body;\nconst MAX_B64 = 11 * 1024 * 1024;\nconst mime = p.mimetype || '';\nconst isDoc = /^document/i.test(p.message_type || '') ||\n  /(spreadsheet|excel|csv|pdf|msword|officedocument)/i.test(mime);\n// Hanya file tabel (xlsx/xls/csv) yang diunggah ke folder \"RC 0\"; PDF dan lainnya hanya dicatat.\nconst isSheet = /(spreadsheet|excel|csv)/i.test(mime);\nconst b64 = isSheet ? (p.media_base64 || null) : null;\nconst tooBig = !!(b64 && b64.length > MAX_B64);\nconst ext = /csv/i.test(mime) ? 'csv' : (/spreadsheetml|openxml/i.test(mime) ? 'xlsx' : 'xls');\n// Nama file tidak dibawa WhatsApp ke sini: pakai keterangan (caption) + waktu WIB.\nconst wib = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ').replace(':', '');\nconst cap = String(p.raw_text ?? p.text ?? '').replace(/[^A-Za-z0-9 _.-]/g, '').trim().slice(0, 40);\nconst fileName = ('RC0 ' + (cap ? cap + ' ' : '') + wib + '.' + ext);\nreturn [{ json: {\n  task_id: p.task_id, chat_id: p.chat_id, too_big: tooBig,\n  upload: !!b64 && !tooBig, b64: tooBig ? null : b64, file_name: fileName, mime,\n  p: {\n    message_id: p.message_id, chat_id: p.chat_id, sender: p.sender, push_name: p.push_name,\n    text: p.raw_text ?? p.text ?? '', message_type: p.message_type, mimetype: p.mimetype,\n  },\n} }];\n"
+        "jsCode": "// Ambil pesan dari payload agen dan bentuk parameter untuk dm_record; kenali perintah teks.\nconst p = $('Webhook agen').first().json.body;\nconst MAX_B64 = 11 * 1024 * 1024;\nconst mime = p.mimetype || '';\nconst isDoc = /^document/i.test(p.message_type || '') ||\n  /(spreadsheet|excel|csv|pdf|msword|officedocument)/i.test(mime);\n// Hanya file tabel (xlsx/xls/csv) yang diunggah ke folder \"RC 0\"; PDF dan lainnya hanya dicatat.\nconst isSheet = /(spreadsheet|excel|csv)/i.test(mime);\nconst b64 = isSheet ? (p.media_base64 || null) : null;\nconst tooBig = !!(b64 && b64.length > MAX_B64);\nconst ext = /csv/i.test(mime) ? 'csv' : (/spreadsheetml|openxml/i.test(mime) ? 'xlsx' : 'xls');\nconst wib = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ').replace(':', '');\nconst cap = String(p.raw_text ?? p.text ?? '').replace(/[^A-Za-z0-9 _.-]/g, '').trim().slice(0, 40);\nconst fileName = ('RC0 ' + (cap ? cap + ' ' : '') + wib + '.' + ext);\nconst t = String(p.raw_text ?? p.text ?? '').trim();\nconst tl = t.toLowerCase();\nlet cmd = 'catat', arg = '';\nif (!isDoc) {\n  if (/^(proses|cek harga|update harga|mulai)\\b/.test(tl)) cmd = 'proses';\n  else if (/^setuju\\b/.test(tl)) { cmd = 'setuju'; arg = tl.replace(/^setuju\\s*/, ''); }\n  else if (/^(pdf|buat pdf|fase 2)\\b/.test(tl)) { cmd = 'pdf'; arg = t.replace(/^(pdf|buat pdf|fase 2)\\s*/i, ''); }\n  else if (/^(minggu baru|rotasi)\\b/.test(tl)) { cmd = 'rotasi'; arg = t.replace(/^(minggu baru|rotasi)\\s*/i, ''); }\n  else if (/^(tes google|tes koneksi)\\b/.test(tl)) cmd = 'tes';\n  else if (/^batal\\b/.test(tl)) cmd = 'batal';\n  else if (/^(bantuan|menu|help)\\b/.test(tl)) cmd = 'bantuan';\n}\nreturn [{ json: {\n  cmd, arg, task_id: p.task_id, chat_id: p.chat_id, too_big: tooBig,\n  upload: !!b64 && !tooBig, b64: tooBig ? null : b64, file_name: fileName, mime,\n  p: {\n    message_id: p.message_id, chat_id: p.chat_id, sender: p.sender, push_name: p.push_name,\n    text: p.raw_text ?? p.text ?? '', message_type: p.message_type, mimetype: p.mimetype,\n  },\n} }];\n"
       }
     },
     {
@@ -270,6 +270,1498 @@
         "jsonBody": "={{ JSON.stringify({ agent_id: 'dapurmbg', status: 'idle', detail: 'Selesai' }) }}",
         "options": {}
       }
+    },
+    {
+      "id": "5afbb15f-7e4b-5a48-84d0-1d3d8b1fe086",
+      "name": "Lapor gagal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4560,
+        3580
+      ],
+      "parameters": {
+        "jsCode": "const e = $input.first().json;\nconst er = e.error || e;\nconst msg = [er.message, er.description].filter(Boolean).join(' – ') || JSON.stringify(e).slice(0, 300);\nreturn [{ json: { reply: '⚠️ Gagal: ' + String(msg).slice(0, 450) + '\\nMohon kabari Claude.' } }];"
+      }
+    },
+    {
+      "id": "f021eedd-59b3-5315-b857-e0cec8c38905",
+      "name": "Balas alur",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4800,
+        3580
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Siapkan').first().json.chat_id, text: $json.reply }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "47b1956b-3821-5eb6-a9d3-62d4f764eeb9",
+      "name": "Tutup alur",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5040,
+        3580
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/finish_task",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_task_id: $('Siapkan').first().json.task_id, p_status: 'done', p_result: { kind: 'perintah' } }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "0ed0626b-e6c2-5c9e-b4fb-8f126bc26c04",
+      "name": "Bantuan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        520
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { reply: \"🍱 *Admin Catering – perintah*\\n• Kirim 2 file RC 0 (sepakat + Sawangan) → otomatis tersimpan di Drive\\n• *proses* → baca RC 0, bandingkan dengan master, kirim daftar perubahan\\n• *setuju* / *setuju kecuali 3,5* / *setuju + 31* → tulis harga ke master\\n• *pdf* → buat 3 PDF PAGU DAPUR (U, S, SAWANGAN) dan kirim link\\n• *minggu baru* → arsipkan master minggu ini, siapkan master minggu depan\\n• *batal* → hapus rencana yang menunggu\\n• *tes google* → cek koneksi Google\" } }];"
+      }
+    },
+    {
+      "id": "9b7983ae-b1d7-568d-9f32-98949f430d3b",
+      "name": "Batal: hapus",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        860
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/dm_state_set",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_key: 'plan', p_val: null }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "5625bfde-e35f-5069-a7c3-570cbc5813d1",
+      "name": "Batal: balasan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        860
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { reply: '🗑️ Rencana dibatalkan. Ketik *proses* untuk mulai lagi.' } }];"
+      }
+    },
+    {
+      "id": "efa41129-3bf7-5f24-8b40-dde3a0d27929",
+      "name": "Tes: cari master",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        1200
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/drive/v3/files?q={{ encodeURIComponent(\"name contains 'Harga Supplier' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false\") }}&orderBy={{ encodeURIComponent('modifiedTime desc') }}&pageSize=50&fields={{ encodeURIComponent('files(id,name,parents,createdTime,modifiedTime)') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "4f9de764-c8c3-59b5-8e34-9d7e7eca45ed",
+      "name": "Tes: baca Sheets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        1200
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ (($json.files || []).find(f => f.name.startsWith('[MASTER] Harga Supplier')) || {}).id }}?fields=properties.title,sheets.properties.title",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "1fc460cd-5848-58c5-8fb2-199adf14cfe9",
+      "name": "Tes: balasan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        1200
+      ],
+      "parameters": {
+        "jsCode": "const j = $json; return [{ json: { reply: '✅ Google OK. Master: ' + j.properties.title + ' (' + (j.sheets || []).length + ' tab)' } }];"
+      }
+    },
+    {
+      "id": "9c1bed55-f719-5900-bd73-3b9821b74788",
+      "name": "Proses: kabar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        1540
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Siapkan').first().json.chat_id, text: '⏳ Membaca file RC 0 dan master…' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "02cf7162-575d-51ad-b94e-5ea593e3c9b9",
+      "name": "Proses: daftar file",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        1540
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/drive/v3/files?q={{ encodeURIComponent(\"'1WEVt0170RsXi3aB-OCrH-DnGExw-LH6T' in parents and trashed=false and (mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='application/vnd.ms-excel')\") }}&orderBy={{ encodeURIComponent('createdTime desc') }}&pageSize=20&fields={{ encodeURIComponent('files(id,name,createdTime)') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "c97ca717-0535-5925-b5c8-0500e8fd9900",
+      "name": "Proses: cari master",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        1540
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/drive/v3/files?q={{ encodeURIComponent(\"name contains 'Harga Supplier' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false\") }}&orderBy={{ encodeURIComponent('modifiedTime desc') }}&pageSize=50&fields={{ encodeURIComponent('files(id,name,parents,createdTime,modifiedTime)') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "bf4f0449-835d-5b11-84ea-e56e1f8313bb",
+      "name": "Proses: baca master",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        1540
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ ($('Proses: cari master').first().json.files || []).find(f => f.name.startsWith('[MASTER] Harga Supplier')).id }}?includeGridData=true&fields={{ encodeURIComponent('sheets(properties(title),data(rowData(values(effectiveValue))))') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "49eb0422-728e-52ed-a524-56a0812dd14a",
+      "name": "Proses: pilih",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        1540
+      ],
+      "parameters": {
+        "jsCode": "const list = $('Proses: daftar file').first().json.files || [];\nconst mf = ($('Proses: cari master').first().json.files || []).find(f => f.name.startsWith('[MASTER] Harga Supplier'));\nif (!mf) return [{ json: { ok: false, reply: '⚠️ Master \"[MASTER] Harga Supplier ...\" tidak ditemukan di Drive.' } }];\nconst cutoff = Date.now() - 21 * 864e5;\nconst c = list.filter(f => new Date(f.createdTime).getTime() > cutoff).slice(0, 4);\nif (!c.length) return [{ json: { ok: false, reply: '⚠️ Belum ada file RC 0 dalam 3 minggu terakhir. Kirim dulu file RC 0 ke grup ini.' } }];\nreturn c.map((f, i) => ({ json: { ok: true, fileId: f.id, fname: f.name, created: f.createdTime, idx: i } }));"
+      }
+    },
+    {
+      "id": "f247855a-24b1-50cd-8d68-df89632bce1e",
+      "name": "Proses: ada file?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2400,
+        1540
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "afeb42f8-0c1f-55ef-9d56-94af821df630",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c05cdc1e-631d-5d54-b24a-acdf4b22d77c",
+      "name": "Proses: konversi RC0",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        1540
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.fileId }}/copy",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: 'tmp-rc0-' + Date.now() + '-' + $json.idx, mimeType: 'application/vnd.google-apps.spreadsheet', parents: ['1WEVt0170RsXi3aB-OCrH-DnGExw-LH6T'] }) }}"
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "9801d96a-7196-5290-a31d-5a6cc092af87",
+      "name": "Proses: baca RC0",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
+        1540
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $json.id }}?includeGridData=true&fields={{ encodeURIComponent('sheets(properties(title),data(rowData(values(effectiveValue))))') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "c40c65e3-a409-5fab-bed4-48e2039b25c2",
+      "name": "Proses: hapus sementara",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        1400
+      ],
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $('Proses: konversi RC0').item.json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "5d58378d-185f-57fc-80e6-908d2bf87502",
+      "name": "Proses: rencana",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        1540
+      ],
+      "parameters": {
+        "jsCode": "// ── Inti perhitungan (dipakai node Code dan diuji lokal) ──────────────────────\nconst norm = x => String(x == null ? '' : x).replace(/\\s+/g, ' ').trim().toLowerCase();\nconst SYN = [['saos', 'saus'], ['jintan', 'jinten'], ['fres ', 'fresh '], ['mozarella', 'mozzarella']];\nconst STOP = new Set(['merk', 'kg', 'pcs', 'gr', 'gram', '1kg', '1', 'l', 'ml', 'liter', 'botol', 'saset', 'sachet', 'cap', 'raw', 'material', 'dan', 'tanpa']);\nconst ALIAS = { 'jamur salju/snow': 'jamur salju' };\nconst TABS = ['SAYURAN', 'KARBOHIDRAT', 'PROTEIN', 'BUMBU', 'SEMBAKO', 'BUAH & SUSU', 'BAHAN TAMBAHAN'];\nconst UTARA = ['pringapus', 'bawen', 'ambarawa', 'banyubiru'];\nconst SELATAN = ['kranggan', 'kedungsari', 'grabag', 'pituruh'];\n\nfunction key(x) {\n  let s = String(x || '').toLowerCase();\n  for (const [a, b] of SYN) s = s.split(a).join(b);\n  s = s.replace(/[^a-z0-9 ]/g, ' ').replace(/(\\d+)\\s*(gr|g|gram)\\b/g, '$1gr');\n  return s.split(/\\s+/).filter(t => t && !STOP.has(t)).sort().join(' ');\n}\nfunction dice(a, b) {\n  a = key(a); b = key(b); if (a.length < 2 || b.length < 2) return 0;\n  const bg = s => { const m = new Map(); for (let i = 0; i < s.length - 1; i++) { const g = s.slice(i, i + 2); m.set(g, (m.get(g) || 0) + 1); } return m; };\n  const A = bg(a), B = bg(b); let inter = 0;\n  for (const [g, c] of A) inter += Math.min(c, B.get(g) || 0);\n  return 2 * inter / ((a.length - 1) + (b.length - 1));\n}\nfunction toGrid(j) {\n  const out = {};\n  for (const s of (j.sheets || [])) {\n    const rows = (((s.data || [])[0] || {}).rowData || []).map(r => ((r && r.values) || []).map(v => {\n      const e = v && v.effectiveValue; if (!e) return null;\n      if ('numberValue' in e) return e.numberValue; if ('stringValue' in e) return e.stringValue;\n      if ('boolValue' in e) return e.boolValue; return null;\n    }));\n    out[s.properties.title] = rows;\n  }\n  return out;\n}\nconst rp = n => (n < 0 ? '-' : '') + String(Math.round(Math.abs(n))).replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.');\n\nfunction masterItems(rows) {\n  const out = [];\n  (rows || []).forEach((r, i) => {\n    if (i === 0) return; const nm = r[1], pr = r[2];\n    if (nm && typeof pr === 'number') out.push({ row: i + 1, name: String(nm).trim(), k: norm(nm), price: pr });\n  });\n  return out;\n}\nfunction rcRows(rows) {\n  let hi = -1, cols = [];\n  for (let i = 0; i < Math.min(12, rows.length); i++) {\n    const js = []; (rows[i] || []).forEach((c, j) => { if (norm(c) === 'rc 0' && j > 0) js.push(j); });\n    if (js.length) { hi = i; cols = js; break; }\n  }\n  if (hi < 0) return [];\n  const out = [];\n  for (let i = hi + 1; i < rows.length; i++) {\n    const r = rows[i] || [];\n    for (const ci of cols) { const nm = r[ci - 1], v = r[ci]; if (nm && typeof v === 'number') out.push({ name: String(nm).trim(), v, row: i + 1 }); }\n  }\n  return out;\n}\nfunction findMaster(items, name, pred) {\n  const nm = ALIAS[norm(name)] || name;\n  const k = norm(nm); const cand = items.filter(pred);\n  let m = cand.filter(x => x.k === k); if (m.length) return { item: m[0], how: 'exact' };\n  const kk = key(nm); m = cand.filter(x => key(x.name) === kk); if (m.length === 1) return { item: m[0], how: 'key' };\n  let best = null, bs = 0; for (const x of cand) { const s = dice(nm, x.name); if (s > bs) { bs = s; best = x; } }\n  if (best && bs >= 0.85) return { item: best, how: 'mirip', score: bs };\n  return null;\n}\nfunction ayamKind(n) {\n  n = norm(n);\n  if (/giling/.test(n)) return 'giling'; if (/dadu/.test(n)) return 'dadu'; if (/katsu/.test(n)) return 'katsu';\n  if (/tanpa kulit/.test(n)) return 'tanpakulit'; if (/(filet|fillet).*(dada|paha)|(dada|paha).*(filet|fillet)/.test(n)) return 'filet';\n  if (/potong/.test(n)) return 'potong'; return null;\n}\nconst EXCLUDE = [[/^bihun/i, 'Bihun tidak diubah (aturan tetap)'], [/minyak goreng/i, 'Minyak goreng dilewati']];\n\nfunction classify(gridsList) {\n  let sepakat = null, sawangan = null;\n  for (const f of gridsList) {\n    const t = Object.keys(f.grid);\n    const isSep = t.includes('PROTEIN') && t.includes('SAYURAN');\n    if (isSep && !sepakat) sepakat = f; else if (!isSep && !sawangan) sawangan = f;\n  }\n  return { sepakat, sawangan };\n}\n\nfunction buildPlan(masterG, sep, saw) {\n  const items = [], unsure = [], unmatched = [], skipped = [], targets = new Map();\n  const add = (e, reasons) => {\n    const tk = e.tab + '|' + e.row;\n    if (targets.has(tk)) { if (targets.get(tk).new !== e.new) reasons.push('nama dobel di RC 0, nilainya beda'); else return; }\n    else targets.set(tk, e);\n    if (e.old > 0 && Math.abs(e.new - e.old) / e.old > 0.5) reasons.push('selisih >50%');\n    if (reasons.length) { e.why = reasons.join('; '); unsure.push(e); } else items.push(e);\n  };\n  for (const tab of TABS) {\n    const mi = masterItems(masterG[tab]);\n    if (sep && sep.grid[tab]) {\n      for (const rc of rcRows(sep.grid[tab])) {\n        const ex = EXCLUDE.find(([re]) => re.test(rc.name)); if (ex) { skipped.push(rc.name + ' (' + ex[1] + ')'); continue; }\n        if (/^ayam /i.test(rc.name)) continue;\n        const pred = x => !/^[su] ?ayam/i.test(x.name) && !(tab === 'SAYURAN' && x.k.endsWith(' s'));\n        const m = findMaster(mi, rc.name, pred);\n        if (!m) { unmatched.push(rc.name); continue; }\n        if (m.item.price === rc.v) continue;\n        add({ tab, row: m.item.row, name: m.item.name, old: m.item.price, new: rc.v, src: 'sepakat', via: m.how === 'key' ? rc.name : null },\n            m.how === 'mirip' ? ['nama mirip dengan \"' + rc.name + '\"'] : []);\n      }\n    }\n  }\n  // Sawangan: item berakhiran \" S\" di blok sayur Sawangan\n  if (saw) {\n    const mi = masterItems(masterG['SAYURAN']);\n    const rows = saw.grid[Object.keys(saw.grid)[0]];\n    for (const rc of rcRows(rows)) {\n      const ex = EXCLUDE.find(([re]) => re.test(rc.name)); if (ex) continue;\n      const m = findMaster(mi, rc.name + ' S', x => x.k.endsWith(' s'));\n      if (!m) { unmatched.push(rc.name + ' (Sawangan)'); continue; }\n      if (m.item.price === rc.v) continue;\n      add({ tab: 'SAYURAN', row: m.item.row, name: m.item.name, old: m.item.price, new: rc.v, src: 'sawangan', via: m.how === 'key' ? rc.name : null },\n          m.how === 'mirip' ? ['nama mirip dengan \"' + rc.name + '\"'] : []);\n    }\n  }\n  // Ayam: harga tertinggi per area\n  if (sep && sep.grid['PROTEIN']) {\n    const rows = sep.grid['PROTEIN']; let hi = -1, cj = -1;\n    for (let i = 0; i < Math.min(30, rows.length) && hi < 0; i++) {\n      (rows[i] || []).forEach((c, j) => { if (hi < 0 && norm(c) === 'item' && norm((rows[i] || [])[j + 1]) === 'pringapus') { hi = i; cj = j; } });\n    }\n    if (hi >= 0) {\n      const areas = []; for (let j = cj + 1; j < rows[hi].length && rows[hi][j]; j++) areas.push([j, norm(rows[hi][j])]);\n      const best = {};\n      for (let i = hi + 1; i < rows.length && (rows[i] || [])[cj]; i++) {\n        const kind = ayamKind(rows[i][cj]); if (!kind) continue;\n        const mx = names => Math.max(-1, ...areas.filter(a => names.includes(a[1])).map(a => rows[i][a[0]]).filter(v => typeof v === 'number'));\n        best[kind] = { u: mx(UTARA), s: mx(SELATAN) };\n      }\n      const pm = masterItems(masterG['PROTEIN']);\n      for (const x of pm) {\n        const g = /^s ?ayam/i.test(x.name) ? 's' : (/^u ?ayam/i.test(x.name) ? 'u' : null); if (!g) continue;\n        const kind = ayamKind(x.name); const b = best[kind]; if (!b || b[g] <= 0) continue;\n        if (b[g] !== x.price) add({ tab: 'PROTEIN', row: x.row, name: x.name, old: x.price, new: b[g], src: (g === 's' ? 'Selatan' : 'Utara') + ', tertinggi' }, []);\n      }\n    }\n  }\n  const order = t => TABS.indexOf(t);\n  const cmp = (a, b) => order(a.tab) - order(b.tab) || a.row - b.row;\n  items.sort(cmp); unsure.sort(cmp);\n  let n = 0; items.forEach(e => e.n = ++n); unsure.forEach(e => e.n = ++n);\n  return { items, unsure, unmatched, skipped };\n}\n\nfunction weekInfo(masterName, sep) {\n  const m = /Harga Supplier\\s+(\\S+)\\s+Week\\s*(\\d+)/i.exec(masterName || '');\n  let dates = null;\n  if (sep) for (const t of Object.keys(sep.grid)) {\n    for (const r of sep.grid[t].slice(0, 6)) for (const c of (r || [])) {\n      const d = /(\\d{1,2})\\s*-\\s*(\\d{1,2})\\s*(jan|feb|mar|apr|mei|jun|jul|agu|sep|okt|nov|des)/i.exec(String(c || ''));\n      if (d && !dates) dates = d[1] + '-' + d[2];\n    }\n  }\n  return { month: m ? m[1] : null, week: m ? m[2] : null, dates };\n}\n\nfunction formatPlan(plan) {\n  const L = [];\n  L.push('📋 *Rencana update harga RC 0*');\n  L.push(plan.masterName + (plan.dates ? ' (' + plan.dates + ')' : ''));\n  L.push('');\n  const line = e => e.n + '. ' + e.tab + ' – ' + e.name + ': ' + rp(e.old) + ' → ' + rp(e.new) + ' (' + (e.new >= e.old ? '+' : '') + rp(e.new - e.old) + ')' + (e.src !== 'sepakat' ? ' [' + e.src + ']' : '') + (e.via ? ' (di RC 0: \"' + e.via.trim() + '\")' : '');\n  L.push('*Akan diubah (' + plan.items.length + '):*');\n  plan.items.forEach(e => L.push(line(e)));\n  if (plan.unsure.length) {\n    L.push(''); L.push('⚠️ *Perlu keputusan (TIDAK dimasukkan kecuali kamu setujui):*');\n    plan.unsure.slice(0, 15).forEach(e => L.push(line(e) + ' — ' + e.why));\n    if (plan.unsure.length > 15) L.push('…dan ' + (plan.unsure.length - 15) + ' lagi');\n  }\n  if (plan.skipped.length) { L.push(''); L.push('Dilewati sesuai aturan: ' + plan.skipped.slice(0, 6).join('; ')); }\n  if (plan.unmatched.length) L.push('Tidak ada di master (dilewati): ' + plan.unmatched.length + ' item.');\n  L.push('');\n  L.push('Balas: *setuju* | *setuju kecuali 3,5* | *setuju + 31* (masukkan yang perlu keputusan) | *batal*');\n  return L.join('\\n');\n}\n\nconst masterG = toGrid($('Proses: baca master').first().json);\nconst metas = $('Proses: pilih').all().map(i => i.json);\nconst reads = $('Proses: baca RC0').all().map(i => i.json);\nconst files = reads.map((j, i) => ({ name: metas[i].fname, id: metas[i].fileId, grid: toGrid(j) }));\nconst { sepakat, sawangan } = classify(files);\nif (!sepakat) return [{ json: { reply: '⚠️ File RC 0 sepakat belum ketemu (yang berisi tab SAYURAN dan PROTEIN). Kirim ke grup lalu ketik *proses* lagi.' } }];\nconst mf = ($('Proses: cari master').first().json.files || []).find(f => f.name.startsWith('[MASTER] Harga Supplier'));\nconst pl = buildPlan(masterG, sepakat, sawangan);\nconst wk = weekInfo(mf.name, sepakat);\nconst plan = { status: 'pending', masterId: mf.id, masterName: mf.name, month: wk.month, week: wk.week, dates: wk.dates,\n  files: { sepakat: sepakat.name, sawangan: sawangan ? sawangan.name : null }, items: pl.items, unsure: pl.unsure,\n  skipped: pl.skipped, unmatched: pl.unmatched, createdAt: new Date().toISOString() };\nlet reply = formatPlan(plan);\nreply += '\\n\\nFile dipakai: ' + sepakat.name + (sawangan ? ' + ' + sawangan.name : ' (file Sawangan BELUM ada, harga Sawangan tidak ikut)');\nreturn [{ json: { reply, plan } }];"
+      }
+    },
+    {
+      "id": "3073db9f-ee22-5a59-a05c-963c1909cbeb",
+      "name": "Proses: simpan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3600,
+        1540
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/dm_state_set",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_key: 'plan', p_val: $json.plan }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "18893841-e92b-5e3c-8e6c-1a0b690bf41a",
+      "name": "Proses: balasan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        1540
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { reply: $('Proses: rencana').first().json.reply } }];"
+      }
+    },
+    {
+      "id": "ceb4d980-404c-5687-9e76-60f279b96526",
+      "name": "Setuju: ambil rencana",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        1880
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/dm_state_get",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_key: 'plan' }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "c897d14d-8e9f-5d71-bda0-78771e8a6f19",
+      "name": "Setuju: susun",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        1880
+      ],
+      "parameters": {
+        "jsCode": "const plan = $json.val;\nif (!plan || !plan.items) return [{ json: { ok: false, reply: 'Belum ada rencana yang menunggu. Ketik *proses* dulu.' } }];\nif (plan.status === 'applied') return [{ json: { ok: false, reply: 'Rencana ini sudah ditulis ke master. Ketik *pdf* untuk lanjut, atau *proses* untuk rencana baru.' } }];\nconst a = String($('Siapkan').first().json.arg || '');\nconst nums = s => (s ? (s.match(/\\d+/g) || []).map(Number) : []);\nconst ex = nums((/kecuali\\s*([\\d,\\s]+)/.exec(a) || [])[1]);\nconst inc = nums((/(?:\\+|masukkan|tambah)\\s*([\\d,\\s]+)/.exec(a) || [])[1]);\nconst chosen = plan.items.filter(e => !ex.includes(e.n)).concat(plan.unsure.filter(e => inc.includes(e.n)));\nif (!chosen.length) return [{ json: { ok: false, reply: 'Tidak ada harga yang dipilih untuk ditulis.' } }];\nconst ranges = chosen.map(e => \"'\" + e.tab + \"'!C\" + e.row);\nreturn [{ json: { ok: true, plan, chosen, ranges, excluded: ex, included: inc,\n  url: 'https://sheets.googleapis.com/v4/spreadsheets/' + plan.masterId + '/values:batchGet?valueRenderOption=UNFORMATTED_VALUE&ranges=' + ranges.map(encodeURIComponent).join('&ranges=') } }];"
+      }
+    },
+    {
+      "id": "fe5fb1d0-eb17-58d3-965c-526c59d97c1d",
+      "name": "Setuju: ada rencana?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        1880
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "29e981fd-3ac2-5b40-889f-6ec138a1a7ae",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3973dc64-f442-5f06-a3e8-ee7867ca4380",
+      "name": "Setuju: baca lama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        1880
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "20416744-5bf4-556b-9fe3-3de507114445",
+      "name": "Setuju: cek lama",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        1880
+      ],
+      "parameters": {
+        "jsCode": "const d = $('Setuju: susun').first().json;\nconst vr = $json.valueRanges || [];\nconst writes = [], blocked = [];\nd.chosen.forEach((e, i) => {\n  const cur = (((vr[i] || {}).values || [])[0] || [])[0];\n  if (Number(cur) === Number(e.old)) writes.push(e); else blocked.push(e.n + '. ' + e.name + ' (sekarang ' + cur + ', rencana mengira ' + e.old + ')');\n});\nconst body = { valueInputOption: 'RAW', data: writes.map(e => ({ range: \"'\" + e.tab + \"'!C\" + e.row, values: [[e.new]] })) };\nreturn [{ json: { ok: writes.length > 0, writes, blocked, body, plan: d.plan, reply: 'Tidak ada yang bisa ditulis: nilai di master sudah beda dari rencana. ' + blocked.join('; ') } }];"
+      }
+    },
+    {
+      "id": "0af6c624-23ca-575f-9a9a-b488c339c165",
+      "name": "Setuju: ada tulisan?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2400,
+        1880
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "8a702696-47b2-5ca9-93f1-dc31d82adb4a",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "69626589-3b8f-5e61-973d-a102a2d46060",
+      "name": "Setuju: tulis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        1880
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Setuju: cek lama').first().json.plan.masterId }}/values:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Setuju: cek lama').first().json.body) }}"
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "2a46e4b2-339f-5a2a-a922-e2589b095411",
+      "name": "Setuju: baca baru",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
+        1880
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Setuju: susun').first().json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "338d43e5-3eef-53b2-b9c7-2ae5dddd8956",
+      "name": "Setuju: verifikasi",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        1880
+      ],
+      "parameters": {
+        "jsCode": "const d = $('Setuju: cek lama').first().json;\nconst all = $('Setuju: susun').first().json.chosen;\nconst vr = $json.valueRanges || [];\nlet ok = 0; const bad = [];\nall.forEach((e, i) => {\n  const want = d.writes.find(w => w.n === e.n); if (!want) return;\n  const cur = (((vr[i] || {}).values || [])[0] || [])[0];\n  if (Number(cur) === Number(e.new)) ok++; else bad.push(e.n + '. ' + e.name + ' (hasil ' + cur + ', seharusnya ' + e.new + ')');\n});\nconst plan = d.plan; plan.status = bad.length ? 'pending' : 'applied'; plan.appliedAt = new Date().toISOString();\nlet reply = (bad.length ? '⚠️ ' : '✅ ') + ok + ' dari ' + d.writes.length + ' harga tertulis dan terverifikasi di ' + plan.masterName + '.';\nif (d.blocked.length) reply += '\\nDilewati karena nilai di master sudah berubah: ' + d.blocked.join('; ');\nif (bad.length) reply += '\\nBELUM cocok: ' + bad.join('; ') + '\\nMohon kabari Claude.';\nelse reply += '\\nLanjut: ketik *pdf* untuk membuat 3 PDF PAGU DAPUR.';\nreturn [{ json: { reply, plan } }];"
+      }
+    },
+    {
+      "id": "5483c9e6-a1ba-5d8e-983f-2b0ea7960212",
+      "name": "Setuju: simpan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3360,
+        1880
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/dm_state_set",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_key: 'plan', p_val: $json.plan }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "125c64c6-e333-5274-9982-209cffbaf777",
+      "name": "Setuju: balasan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        1880
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { reply: $('Setuju: verifikasi').first().json.reply } }];"
+      }
+    },
+    {
+      "id": "6cbcd074-acad-5126-860b-6d2acb1b4c55",
+      "name": "PDF: ambil rencana",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        2220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/dm_state_get",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_key: 'plan' }) }}",
+        "options": {},
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify($env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? { apikey: $env.SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + $env.SUPABASE_SERVICE_KEY } : { apikey: $env.SUPABASE_SERVICE_KEY }) }}"
+      }
+    },
+    {
+      "id": "d12454f8-cb31-57a1-944a-1a8ec29d1d3e",
+      "name": "PDF: nama",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        2220
+      ],
+      "parameters": {
+        "jsCode": "const plan = $json.val || {};\nconst arg = String($('Siapkan').first().json.arg || '');\nlet month = plan.month, week = plan.week, dates = plan.dates;\nconst a = /(\\S+)\\s+week\\s*(\\d+)\\s+(\\d{1,2})\\s*-\\s*(\\d{1,2})/i.exec(arg);\nif (a) { month = a[1]; week = a[2]; dates = a[3] + '-' + a[4]; }\nif (!month || !week || !dates) return [{ json: { ok: false, reply: 'Saya belum tahu minggu dan tanggalnya. Ketik *proses* dulu, atau tulis: *pdf November Week 4 22-26*' } }];\nmonth = month.charAt(0).toUpperCase() + month.slice(1).toLowerCase();\nconst base = ' PAGU DAPUR - ' + month + ' Week ' + week + '(' + dates + month + ').pdf';\nreturn [{ json: { ok: true, label: month + ' Week ' + week + ' (' + dates + ')', names: { U: 'U' + base, S: 'S' + base, W: 'SAWANGAN' + base } } }];"
+      }
+    },
+    {
+      "id": "fe9f8879-945d-56cc-83ee-4ecd781446e4",
+      "name": "PDF: nama ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        2220
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "790d495b-cf94-584f-b19f-ed493a14aed3",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "af9d09c4-7004-54a3-b222-0426e2eb898b",
+      "name": "PDF: kabar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        2220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/lib-send-wa",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Siapkan').first().json.chat_id, text: '⏳ Membuat 3 PDF PAGU DAPUR (' + $('PDF: nama').first().json.label + ')…' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "7bd1d3a5-d79d-58d1-bfcf-157d93d79988",
+      "name": "PDF: baca PAGU",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        2220
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/1e1swdU2BkjI7zT5j7UrdoE02_hlsd7D0x_c9fI8jFNQ?includeGridData=true&ranges={{ encodeURIComponent(\"'BAHAN BAKU ALL'!A1:G600\") }}&fields={{ encodeURIComponent('sheets(properties(title,sheetId),data(rowData(values(effectiveValue)),rowMetadata(hiddenByUser)))') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "7d20481f-6c84-568c-b7a5-00052c4509c6",
+      "name": "PDF: hitung baris",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        2220
+      ],
+      "parameters": {
+        "jsCode": "// ── Inti perhitungan (dipakai node Code dan diuji lokal) ──────────────────────\nconst norm = x => String(x == null ? '' : x).replace(/\\s+/g, ' ').trim().toLowerCase();\nconst SYN = [['saos', 'saus'], ['jintan', 'jinten'], ['fres ', 'fresh '], ['mozarella', 'mozzarella']];\nconst STOP = new Set(['merk', 'kg', 'pcs', 'gr', 'gram', '1kg', '1', 'l', 'ml', 'liter', 'botol', 'saset', 'sachet', 'cap', 'raw', 'material', 'dan', 'tanpa']);\nconst ALIAS = { 'jamur salju/snow': 'jamur salju' };\nconst TABS = ['SAYURAN', 'KARBOHIDRAT', 'PROTEIN', 'BUMBU', 'SEMBAKO', 'BUAH & SUSU', 'BAHAN TAMBAHAN'];\nconst UTARA = ['pringapus', 'bawen', 'ambarawa', 'banyubiru'];\nconst SELATAN = ['kranggan', 'kedungsari', 'grabag', 'pituruh'];\n\nfunction key(x) {\n  let s = String(x || '').toLowerCase();\n  for (const [a, b] of SYN) s = s.split(a).join(b);\n  s = s.replace(/[^a-z0-9 ]/g, ' ').replace(/(\\d+)\\s*(gr|g|gram)\\b/g, '$1gr');\n  return s.split(/\\s+/).filter(t => t && !STOP.has(t)).sort().join(' ');\n}\nfunction dice(a, b) {\n  a = key(a); b = key(b); if (a.length < 2 || b.length < 2) return 0;\n  const bg = s => { const m = new Map(); for (let i = 0; i < s.length - 1; i++) { const g = s.slice(i, i + 2); m.set(g, (m.get(g) || 0) + 1); } return m; };\n  const A = bg(a), B = bg(b); let inter = 0;\n  for (const [g, c] of A) inter += Math.min(c, B.get(g) || 0);\n  return 2 * inter / ((a.length - 1) + (b.length - 1));\n}\nfunction toGrid(j) {\n  const out = {};\n  for (const s of (j.sheets || [])) {\n    const rows = (((s.data || [])[0] || {}).rowData || []).map(r => ((r && r.values) || []).map(v => {\n      const e = v && v.effectiveValue; if (!e) return null;\n      if ('numberValue' in e) return e.numberValue; if ('stringValue' in e) return e.stringValue;\n      if ('boolValue' in e) return e.boolValue; return null;\n    }));\n    out[s.properties.title] = rows;\n  }\n  return out;\n}\nconst rp = n => (n < 0 ? '-' : '') + String(Math.round(Math.abs(n))).replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.');\n\nfunction masterItems(rows) {\n  const out = [];\n  (rows || []).forEach((r, i) => {\n    if (i === 0) return; const nm = r[1], pr = r[2];\n    if (nm && typeof pr === 'number') out.push({ row: i + 1, name: String(nm).trim(), k: norm(nm), price: pr });\n  });\n  return out;\n}\nfunction rcRows(rows) {\n  let hi = -1, cols = [];\n  for (let i = 0; i < Math.min(12, rows.length); i++) {\n    const js = []; (rows[i] || []).forEach((c, j) => { if (norm(c) === 'rc 0' && j > 0) js.push(j); });\n    if (js.length) { hi = i; cols = js; break; }\n  }\n  if (hi < 0) return [];\n  const out = [];\n  for (let i = hi + 1; i < rows.length; i++) {\n    const r = rows[i] || [];\n    for (const ci of cols) { const nm = r[ci - 1], v = r[ci]; if (nm && typeof v === 'number') out.push({ name: String(nm).trim(), v, row: i + 1 }); }\n  }\n  return out;\n}\nfunction findMaster(items, name, pred) {\n  const nm = ALIAS[norm(name)] || name;\n  const k = norm(nm); const cand = items.filter(pred);\n  let m = cand.filter(x => x.k === k); if (m.length) return { item: m[0], how: 'exact' };\n  const kk = key(nm); m = cand.filter(x => key(x.name) === kk); if (m.length === 1) return { item: m[0], how: 'key' };\n  let best = null, bs = 0; for (const x of cand) { const s = dice(nm, x.name); if (s > bs) { bs = s; best = x; } }\n  if (best && bs >= 0.85) return { item: best, how: 'mirip', score: bs };\n  return null;\n}\nfunction ayamKind(n) {\n  n = norm(n);\n  if (/giling/.test(n)) return 'giling'; if (/dadu/.test(n)) return 'dadu'; if (/katsu/.test(n)) return 'katsu';\n  if (/tanpa kulit/.test(n)) return 'tanpakulit'; if (/(filet|fillet).*(dada|paha)|(dada|paha).*(filet|fillet)/.test(n)) return 'filet';\n  if (/potong/.test(n)) return 'potong'; return null;\n}\nconst EXCLUDE = [[/^bihun/i, 'Bihun tidak diubah (aturan tetap)'], [/minyak goreng/i, 'Minyak goreng dilewati']];\n\nfunction classify(gridsList) {\n  let sepakat = null, sawangan = null;\n  for (const f of gridsList) {\n    const t = Object.keys(f.grid);\n    const isSep = t.includes('PROTEIN') && t.includes('SAYURAN');\n    if (isSep && !sepakat) sepakat = f; else if (!isSep && !sawangan) sawangan = f;\n  }\n  return { sepakat, sawangan };\n}\n\nfunction buildPlan(masterG, sep, saw) {\n  const items = [], unsure = [], unmatched = [], skipped = [], targets = new Map();\n  const add = (e, reasons) => {\n    const tk = e.tab + '|' + e.row;\n    if (targets.has(tk)) { if (targets.get(tk).new !== e.new) reasons.push('nama dobel di RC 0, nilainya beda'); else return; }\n    else targets.set(tk, e);\n    if (e.old > 0 && Math.abs(e.new - e.old) / e.old > 0.5) reasons.push('selisih >50%');\n    if (reasons.length) { e.why = reasons.join('; '); unsure.push(e); } else items.push(e);\n  };\n  for (const tab of TABS) {\n    const mi = masterItems(masterG[tab]);\n    if (sep && sep.grid[tab]) {\n      for (const rc of rcRows(sep.grid[tab])) {\n        const ex = EXCLUDE.find(([re]) => re.test(rc.name)); if (ex) { skipped.push(rc.name + ' (' + ex[1] + ')'); continue; }\n        if (/^ayam /i.test(rc.name)) continue;\n        const pred = x => !/^[su] ?ayam/i.test(x.name) && !(tab === 'SAYURAN' && x.k.endsWith(' s'));\n        const m = findMaster(mi, rc.name, pred);\n        if (!m) { unmatched.push(rc.name); continue; }\n        if (m.item.price === rc.v) continue;\n        add({ tab, row: m.item.row, name: m.item.name, old: m.item.price, new: rc.v, src: 'sepakat', via: m.how === 'key' ? rc.name : null },\n            m.how === 'mirip' ? ['nama mirip dengan \"' + rc.name + '\"'] : []);\n      }\n    }\n  }\n  // Sawangan: item berakhiran \" S\" di blok sayur Sawangan\n  if (saw) {\n    const mi = masterItems(masterG['SAYURAN']);\n    const rows = saw.grid[Object.keys(saw.grid)[0]];\n    for (const rc of rcRows(rows)) {\n      const ex = EXCLUDE.find(([re]) => re.test(rc.name)); if (ex) continue;\n      const m = findMaster(mi, rc.name + ' S', x => x.k.endsWith(' s'));\n      if (!m) { unmatched.push(rc.name + ' (Sawangan)'); continue; }\n      if (m.item.price === rc.v) continue;\n      add({ tab: 'SAYURAN', row: m.item.row, name: m.item.name, old: m.item.price, new: rc.v, src: 'sawangan', via: m.how === 'key' ? rc.name : null },\n          m.how === 'mirip' ? ['nama mirip dengan \"' + rc.name + '\"'] : []);\n    }\n  }\n  // Ayam: harga tertinggi per area\n  if (sep && sep.grid['PROTEIN']) {\n    const rows = sep.grid['PROTEIN']; let hi = -1, cj = -1;\n    for (let i = 0; i < Math.min(30, rows.length) && hi < 0; i++) {\n      (rows[i] || []).forEach((c, j) => { if (hi < 0 && norm(c) === 'item' && norm((rows[i] || [])[j + 1]) === 'pringapus') { hi = i; cj = j; } });\n    }\n    if (hi >= 0) {\n      const areas = []; for (let j = cj + 1; j < rows[hi].length && rows[hi][j]; j++) areas.push([j, norm(rows[hi][j])]);\n      const best = {};\n      for (let i = hi + 1; i < rows.length && (rows[i] || [])[cj]; i++) {\n        const kind = ayamKind(rows[i][cj]); if (!kind) continue;\n        const mx = names => Math.max(-1, ...areas.filter(a => names.includes(a[1])).map(a => rows[i][a[0]]).filter(v => typeof v === 'number'));\n        best[kind] = { u: mx(UTARA), s: mx(SELATAN) };\n      }\n      const pm = masterItems(masterG['PROTEIN']);\n      for (const x of pm) {\n        const g = /^s ?ayam/i.test(x.name) ? 's' : (/^u ?ayam/i.test(x.name) ? 'u' : null); if (!g) continue;\n        const kind = ayamKind(x.name); const b = best[kind]; if (!b || b[g] <= 0) continue;\n        if (b[g] !== x.price) add({ tab: 'PROTEIN', row: x.row, name: x.name, old: x.price, new: b[g], src: (g === 's' ? 'Selatan' : 'Utara') + ', tertinggi' }, []);\n      }\n    }\n  }\n  const order = t => TABS.indexOf(t);\n  const cmp = (a, b) => order(a.tab) - order(b.tab) || a.row - b.row;\n  items.sort(cmp); unsure.sort(cmp);\n  let n = 0; items.forEach(e => e.n = ++n); unsure.forEach(e => e.n = ++n);\n  return { items, unsure, unmatched, skipped };\n}\n\nfunction weekInfo(masterName, sep) {\n  const m = /Harga Supplier\\s+(\\S+)\\s+Week\\s*(\\d+)/i.exec(masterName || '');\n  let dates = null;\n  if (sep) for (const t of Object.keys(sep.grid)) {\n    for (const r of sep.grid[t].slice(0, 6)) for (const c of (r || [])) {\n      const d = /(\\d{1,2})\\s*-\\s*(\\d{1,2})\\s*(jan|feb|mar|apr|mei|jun|jul|agu|sep|okt|nov|des)/i.exec(String(c || ''));\n      if (d && !dates) dates = d[1] + '-' + d[2];\n    }\n  }\n  return { month: m ? m[1] : null, week: m ? m[2] : null, dates };\n}\n\nfunction formatPlan(plan) {\n  const L = [];\n  L.push('📋 *Rencana update harga RC 0*');\n  L.push(plan.masterName + (plan.dates ? ' (' + plan.dates + ')' : ''));\n  L.push('');\n  const line = e => e.n + '. ' + e.tab + ' – ' + e.name + ': ' + rp(e.old) + ' → ' + rp(e.new) + ' (' + (e.new >= e.old ? '+' : '') + rp(e.new - e.old) + ')' + (e.src !== 'sepakat' ? ' [' + e.src + ']' : '') + (e.via ? ' (di RC 0: \"' + e.via.trim() + '\")' : '');\n  L.push('*Akan diubah (' + plan.items.length + '):*');\n  plan.items.forEach(e => L.push(line(e)));\n  if (plan.unsure.length) {\n    L.push(''); L.push('⚠️ *Perlu keputusan (TIDAK dimasukkan kecuali kamu setujui):*');\n    plan.unsure.slice(0, 15).forEach(e => L.push(line(e) + ' — ' + e.why));\n    if (plan.unsure.length > 15) L.push('…dan ' + (plan.unsure.length - 15) + ' lagi');\n  }\n  if (plan.skipped.length) { L.push(''); L.push('Dilewati sesuai aturan: ' + plan.skipped.slice(0, 6).join('; ')); }\n  if (plan.unmatched.length) L.push('Tidak ada di master (dilewati): ' + plan.unmatched.length + ' item.');\n  L.push('');\n  L.push('Balas: *setuju* | *setuju kecuali 3,5* | *setuju + 31* (masukkan yang perlu keputusan) | *batal*');\n  return L.join('\\n');\n}\n\nconst sh = $json.sheets[0]; const sheetId = sh.properties.sheetId;\nconst rows = toGrid({ sheets: [sh] })[sh.properties.title];\nconst meta = (sh.data[0].rowMetadata || []).map(m => !!(m && m.hiddenByUser));\nlet last = 0; rows.forEach((r, i) => { if (r && r[1]) last = i; });\nconst isS = n => /\\sS$/.test(String(n || '').trim());\nconst set = { S: [], uA: [], sA: [], reg: [], oil: [] };\nrows.forEach((r, i) => {\n  if (i === 0 || !r || !r[1]) return; const n = String(r[1]).trim();\n  if (isS(n)) set.S.push(i); else if (String(r[6] || '').toLowerCase() === 'sayuran') set.reg.push(i);\n  if (/^s ?ayam/i.test(n)) set.sA.push(i); if (/^u ?ayam/i.test(n)) set.uA.push(i);\n  if (/sunco|fortune/i.test(n)) set.oil.push(i);\n});\nif (!set.S.length || !set.sA.length || !set.uA.length || !set.reg.length)\n  return [{ json: { ok: false, reply: '⚠️ Struktur PAGU DAPUR tidak seperti biasa (sayur Sawangan ' + set.S.length + ', sAyam ' + set.sA.length + ', u Ayam ' + set.uA.length + ', sayur biasa ' + set.reg.length + '). Saya berhenti, tidak mengubah apa pun.' } }];\nconst mk = hid => {\n  const H = new Set(hid); const req = []; let i = 1;\n  while (i <= last) { const v = H.has(i); let j = i; while (j + 1 <= last && H.has(j + 1) === v) j++;\n    req.push({ updateDimensionProperties: { range: { sheetId, dimension: 'ROWS', startIndex: i, endIndex: j + 1 }, properties: { hiddenByUser: v }, fields: 'hiddenByUser' } }); i = j + 1; }\n  return req;\n};\nconst init = []; meta.forEach((h, i) => { if (h && i >= 1 && i <= last) init.push(i); });\nconst n = $('PDF: nama').first().json;\nreturn [{ json: { ok: true, sheetId, last, initHidden: init, names: n.names, label: n.label,\n  counts: { S: set.S.length, sA: set.sA.length, uA: set.uA.length, reg: set.reg.length, oil: set.oil.length },\n  reqU: mk([...set.S, ...set.sA, ...set.oil]), reqS: mk([...set.S, ...set.uA, ...set.oil]),\n  reqW: mk([...set.reg, ...set.uA, ...set.oil]), reqInit: mk(init) } }];"
+      }
+    },
+    {
+      "id": "18bec9fa-24db-5c45-aeea-352cfda62905",
+      "name": "PDF: baris ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        2220
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "9a728d87-da9a-5978-aec1-045649f32ba5",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "46169f76-b220-549d-a96d-a07529cd0494",
+      "name": "PDF: atur U",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
+        2220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/1e1swdU2BkjI7zT5j7UrdoE02_hlsd7D0x_c9fI8jFNQ:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $('PDF: hitung baris').first().json.reqU }) }}"
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "4c758c81-75d4-51e5-aa9f-55b998a82dca",
+      "name": "PDF: ekspor U",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        2220
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/drive/v3/files/1e1swdU2BkjI7zT5j7UrdoE02_hlsd7D0x_c9fI8jFNQ/export?mimeType=application%2Fpdf",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "39ef490a-253b-54d6-b5cf-7e6c3e64e39a",
+      "name": "PDF: simpan U",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3360,
+        2220
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "file",
+        "operation": "upload",
+        "inputDataFieldName": "data",
+        "name": "={{ $('PDF: hitung baris').first().json.names.U }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "17pWW6G5SpE9SjyJmzo_Z4BD3QezDILtG"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "7da5b2fd-9242-545f-ab06-a670fda3225d",
+      "name": "PDF: atur S",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3600,
+        2220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/1e1swdU2BkjI7zT5j7UrdoE02_hlsd7D0x_c9fI8jFNQ:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $('PDF: hitung baris').first().json.reqS }) }}"
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "1bb746c7-8bae-5754-a4a7-e23777783ea3",
+      "name": "PDF: ekspor S",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3840,
+        2220
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/drive/v3/files/1e1swdU2BkjI7zT5j7UrdoE02_hlsd7D0x_c9fI8jFNQ/export?mimeType=application%2Fpdf",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "b12f507f-345c-5249-b625-eb0a41d31f30",
+      "name": "PDF: simpan S",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        4080,
+        2220
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "file",
+        "operation": "upload",
+        "inputDataFieldName": "data",
+        "name": "={{ $('PDF: hitung baris').first().json.names.S }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "17pWW6G5SpE9SjyJmzo_Z4BD3QezDILtG"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "8e4163c8-3b60-59d3-a1cc-ce575adfd541",
+      "name": "PDF: atur W",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4320,
+        2220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/1e1swdU2BkjI7zT5j7UrdoE02_hlsd7D0x_c9fI8jFNQ:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $('PDF: hitung baris').first().json.reqW }) }}"
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "a638fb42-d433-5e8e-aaf2-7173749c4286",
+      "name": "PDF: ekspor W",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4560,
+        2220
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/drive/v3/files/1e1swdU2BkjI7zT5j7UrdoE02_hlsd7D0x_c9fI8jFNQ/export?mimeType=application%2Fpdf",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "856acd72-5717-5b8e-806f-1731181c8c2c",
+      "name": "PDF: simpan W",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        4800,
+        2220
+      ],
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "file",
+        "operation": "upload",
+        "inputDataFieldName": "data",
+        "name": "={{ $('PDF: hitung baris').first().json.names.W }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "17pWW6G5SpE9SjyJmzo_Z4BD3QezDILtG"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "81456629-06ed-5691-8373-79582f26133e",
+      "name": "PDF: pulihkan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5040,
+        2220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/1e1swdU2BkjI7zT5j7UrdoE02_hlsd7D0x_c9fI8jFNQ:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $('PDF: hitung baris').first().json.reqInit }) }}"
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "da69bad7-4f70-52e7-8377-d0454a34df39",
+      "name": "PDF: cek pulih",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5280,
+        2220
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/1e1swdU2BkjI7zT5j7UrdoE02_hlsd7D0x_c9fI8jFNQ?includeGridData=true&ranges={{ encodeURIComponent(\"'BAHAN BAKU ALL'!A1:G600\") }}&fields={{ encodeURIComponent('sheets(data(rowMetadata(hiddenByUser)))') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "5b48be09-f190-5483-83e1-e6a5619f05fe",
+      "name": "PDF: balasan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5520,
+        2220
+      ],
+      "parameters": {
+        "jsCode": "const h = $('PDF: hitung baris').first().json;\nconst meta = ($json.sheets[0].data[0].rowMetadata || []).map(m => !!(m && m.hiddenByUser));\nconst now = []; meta.forEach((v, i) => { if (v && i >= 1 && i <= h.last) now.push(i); });\nconst same = JSON.stringify(now) === JSON.stringify(h.initHidden);\nconst L = id => 'https://drive.google.com/file/d/' + id + '/view';\nlet reply = '✅ 3 PDF PAGU DAPUR ' + h.label + ' selesai:\\n' +\n  'U: ' + L($('PDF: simpan U').first().json.id) + '\\n' +\n  'S: ' + L($('PDF: simpan S').first().json.id) + '\\n' +\n  'SAWANGAN: ' + L($('PDF: simpan W').first().json.id);\nreply += same ? '\\nSheet PAGU DAPUR sudah dikembalikan ke keadaan awal.' : '\\n⚠️ Sheet PAGU DAPUR belum kembali persis ke keadaan awal, mohon kabari Claude.';\nreturn [{ json: { reply } }];"
+      }
+    },
+    {
+      "id": "6f13422b-d35e-594e-9ef1-46af65d0f563",
+      "name": "PDF: pulihkan darurat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3600,
+        2900
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/1e1swdU2BkjI7zT5j7UrdoE02_hlsd7D0x_c9fI8jFNQ:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $('PDF: hitung baris').first().json.reqInit }) }}"
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "81325c74-697f-53a5-aad7-46d68ae25fbd",
+      "name": "Rotasi: cari",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        2560
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/drive/v3/files?q={{ encodeURIComponent(\"name contains 'Harga Supplier' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false\") }}&orderBy={{ encodeURIComponent('modifiedTime desc') }}&pageSize=50&fields={{ encodeURIComponent('files(id,name,parents,createdTime,modifiedTime)') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "6baaf6ea-c328-52e5-b3f5-59471aa1580f",
+      "name": "Rotasi: hitung",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        2560
+      ],
+      "parameters": {
+        "jsCode": "const list = $json.files || [];\nconst cur = list.find(f => f.name.startsWith('[MASTER] Harga Supplier'));\nif (!cur) return [{ json: { ok: false, reply: '⚠️ Master \"[MASTER] Harga Supplier ...\" tidak ditemukan.' } }];\nconst m = /Harga Supplier\\s+(\\S+)\\s+Week\\s*(\\d+)/i.exec(cur.name);\nif (!m) return [{ json: { ok: false, reply: '⚠️ Nama master tidak bisa dibaca: ' + cur.name } }];\nconst arg = String($('Siapkan').first().json.arg || '');\nlet month = m[1], wk = parseInt(m[2], 10) + 1;\nconst a = /(\\S+)\\s+week\\s*(\\d+)/i.exec(arg);\nif (a) { month = a[1]; wk = parseInt(a[2], 10); }\nelse if (wk > 4) return [{ json: { ok: false, reply: 'Setelah ' + m[1] + ' Week ' + m[2] + ' bulannya mungkin ganti. Tulis lengkap, mis: *minggu baru Desember Week 1*' } }];\nmonth = month.charAt(0).toUpperCase() + month.slice(1).toLowerCase();\nconst arch = 'Harga Supplier ' + m[1] + ' Week ' + m[2];\nif (list.some(f => f.name === arch)) return [{ json: { ok: false, reply: 'Arsip \"' + arch + '\" sudah ada, sepertinya rotasi sudah dilakukan. Master sekarang: ' + cur.name } }];\nconst newName = '[MASTER] Harga Supplier ' + month + ' Week ' + wk;\nreturn [{ json: { ok: true, id: cur.id, parents: cur.parents || [], arch, newName, oldName: cur.name } }];"
+      }
+    },
+    {
+      "id": "b704ae5f-2454-5e2f-8709-4d1a261e29c2",
+      "name": "Rotasi: ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        2560
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "8f419436-7a4e-5235-88d1-8dcbe39e415c",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e289b923-c6fc-584f-bb66-cf60e6a9c02a",
+      "name": "Rotasi: salin",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        2560
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.id }}/copy",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.arch, parents: $json.parents }) }}"
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "ebdf0683-32f2-5d60-92b9-b43a2b992e4f",
+      "name": "Rotasi: ganti nama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        2560
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $('Rotasi: hitung').first().json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $('Rotasi: hitung').first().json.newName }) }}"
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Doo76uHkmH0qmaiU",
+          "name": "Google Drive OAuth - Kantor AI"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "69bf874c-c170-54ec-88ff-55cc14a2c2f0",
+      "name": "Rotasi: balasan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        2560
+      ],
+      "parameters": {
+        "jsCode": "const d = $('Rotasi: hitung').first().json;\nreturn [{ json: { reply: '✅ Minggu baru siap.\\nArsip: ' + d.arch + '\\nMaster aktif: ' + d.newName + '\\nLanjut: kirim 2 file RC 0 minggu ini, lalu ketik *proses*.' } }];"
+      }
+    },
+    {
+      "id": "227c9df1-3b1d-593d-b43e-8428459eb8b6",
+      "name": "Perintah",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        600,
+        260
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "dd47c8c5-5287-5273-9faa-b33846f99d47",
+                    "leftValue": "={{ $json.cmd }}",
+                    "rightValue": "proses",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "proses"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "6d55bffd-78c5-5013-a60b-d246b2c2034c",
+                    "leftValue": "={{ $json.cmd }}",
+                    "rightValue": "setuju",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "setuju"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cf0dddd7-0c11-5561-8a37-e5d06c5ea005",
+                    "leftValue": "={{ $json.cmd }}",
+                    "rightValue": "pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "pdf"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "67cb086e-2954-5b2c-9389-85d49e4aa9c0",
+                    "leftValue": "={{ $json.cmd }}",
+                    "rightValue": "rotasi",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "rotasi"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "2e251410-772e-5955-a694-c27c4bfde895",
+                    "leftValue": "={{ $json.cmd }}",
+                    "rightValue": "tes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "tes"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "01a2701a-7f0e-58a9-b55c-19378a95841e",
+                    "leftValue": "={{ $json.cmd }}",
+                    "rightValue": "batal",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "batal"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "2b3af83b-96f1-5d3f-9133-db62c6d40bd5",
+                    "leftValue": "={{ $json.cmd }}",
+                    "rightValue": "bantuan",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "bantuan"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
     }
   ],
   "connections": {
@@ -299,7 +1791,930 @@
       "main": [
         [
           {
+            "node": "Perintah",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Perintah": {
+      "main": [
+        [
+          {
+            "node": "Proses: kabar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Setuju: ambil rencana",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF: ambil rencana",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rotasi: cari",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tes: cari master",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Batal: hapus",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bantuan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Catat (RPC dm_record)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lapor gagal": {
+      "main": [
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Balas alur": {
+      "main": [
+        [
+          {
+            "node": "Tutup alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tutup alur": {
+      "main": [
+        [
+          {
+            "node": "Status: santai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bantuan": {
+      "main": [
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batal: hapus": {
+      "main": [
+        [
+          {
+            "node": "Batal: balasan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batal: balasan": {
+      "main": [
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tes: cari master": {
+      "main": [
+        [
+          {
+            "node": "Tes: baca Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tes: baca Sheets": {
+      "main": [
+        [
+          {
+            "node": "Tes: balasan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tes: balasan": {
+      "main": [
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proses: kabar": {
+      "main": [
+        [
+          {
+            "node": "Proses: daftar file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proses: daftar file": {
+      "main": [
+        [
+          {
+            "node": "Proses: cari master",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proses: cari master": {
+      "main": [
+        [
+          {
+            "node": "Proses: baca master",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proses: baca master": {
+      "main": [
+        [
+          {
+            "node": "Proses: pilih",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proses: pilih": {
+      "main": [
+        [
+          {
+            "node": "Proses: ada file?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proses: ada file?": {
+      "main": [
+        [
+          {
+            "node": "Proses: konversi RC0",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proses: konversi RC0": {
+      "main": [
+        [
+          {
+            "node": "Proses: baca RC0",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proses: baca RC0": {
+      "main": [
+        [
+          {
+            "node": "Proses: hapus sementara",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Proses: rencana",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proses: rencana": {
+      "main": [
+        [
+          {
+            "node": "Proses: simpan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proses: simpan": {
+      "main": [
+        [
+          {
+            "node": "Proses: balasan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proses: balasan": {
+      "main": [
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setuju: ambil rencana": {
+      "main": [
+        [
+          {
+            "node": "Setuju: susun",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setuju: susun": {
+      "main": [
+        [
+          {
+            "node": "Setuju: ada rencana?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setuju: ada rencana?": {
+      "main": [
+        [
+          {
+            "node": "Setuju: baca lama",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setuju: baca lama": {
+      "main": [
+        [
+          {
+            "node": "Setuju: cek lama",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setuju: cek lama": {
+      "main": [
+        [
+          {
+            "node": "Setuju: ada tulisan?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setuju: ada tulisan?": {
+      "main": [
+        [
+          {
+            "node": "Setuju: tulis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setuju: tulis": {
+      "main": [
+        [
+          {
+            "node": "Setuju: baca baru",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setuju: baca baru": {
+      "main": [
+        [
+          {
+            "node": "Setuju: verifikasi",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setuju: verifikasi": {
+      "main": [
+        [
+          {
+            "node": "Setuju: simpan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setuju: simpan": {
+      "main": [
+        [
+          {
+            "node": "Setuju: balasan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setuju: balasan": {
+      "main": [
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: ambil rencana": {
+      "main": [
+        [
+          {
+            "node": "PDF: nama",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: nama": {
+      "main": [
+        [
+          {
+            "node": "PDF: nama ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: nama ok?": {
+      "main": [
+        [
+          {
+            "node": "PDF: kabar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: kabar": {
+      "main": [
+        [
+          {
+            "node": "PDF: baca PAGU",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: baca PAGU": {
+      "main": [
+        [
+          {
+            "node": "PDF: hitung baris",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: hitung baris": {
+      "main": [
+        [
+          {
+            "node": "PDF: baris ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: baris ok?": {
+      "main": [
+        [
+          {
+            "node": "PDF: atur U",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: atur U": {
+      "main": [
+        [
+          {
+            "node": "PDF: ekspor U",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF: pulihkan darurat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: ekspor U": {
+      "main": [
+        [
+          {
+            "node": "PDF: simpan U",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF: pulihkan darurat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: simpan U": {
+      "main": [
+        [
+          {
+            "node": "PDF: atur S",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF: pulihkan darurat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: atur S": {
+      "main": [
+        [
+          {
+            "node": "PDF: ekspor S",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF: pulihkan darurat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: ekspor S": {
+      "main": [
+        [
+          {
+            "node": "PDF: simpan S",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF: pulihkan darurat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: simpan S": {
+      "main": [
+        [
+          {
+            "node": "PDF: atur W",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF: pulihkan darurat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: atur W": {
+      "main": [
+        [
+          {
+            "node": "PDF: ekspor W",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF: pulihkan darurat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: ekspor W": {
+      "main": [
+        [
+          {
+            "node": "PDF: simpan W",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF: pulihkan darurat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: simpan W": {
+      "main": [
+        [
+          {
+            "node": "PDF: pulihkan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF: pulihkan darurat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: pulihkan": {
+      "main": [
+        [
+          {
+            "node": "PDF: cek pulih",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: cek pulih": {
+      "main": [
+        [
+          {
+            "node": "PDF: balasan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: balasan": {
+      "main": [
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF: pulihkan darurat": {
+      "main": [
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rotasi: cari": {
+      "main": [
+        [
+          {
+            "node": "Rotasi: hitung",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rotasi: hitung": {
+      "main": [
+        [
+          {
+            "node": "Rotasi: ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rotasi: ok?": {
+      "main": [
+        [
+          {
+            "node": "Rotasi: salin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Balas alur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rotasi: salin": {
+      "main": [
+        [
+          {
+            "node": "Rotasi: ganti nama",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rotasi: ganti nama": {
+      "main": [
+        [
+          {
+            "node": "Rotasi: balasan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lapor gagal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rotasi: balasan": {
+      "main": [
+        [
+          {
+            "node": "Balas alur",
             "type": "main",
             "index": 0
           }
