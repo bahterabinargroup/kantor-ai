@@ -72,10 +72,8 @@ if (s.too_big) {
 } else if (s.upload) {
   let d = null;
   try { d = $('Unggah ke Drive').first().json; } catch (e) {}
-  if (d && d.id && !d.error) reply = '✅ File tersimpan di Drive (folder RC 0): ' + s.file_name + '
-' + (res.reply || '');
-  else reply = '⚠️ File diterima tapi gagal disimpan ke Drive. Saya catat dulu, mohon kabari Claude.
-' + (res.reply || '');
+  if (d && d.id && !d.error) reply = '✅ File tersimpan di Drive (folder RC 0): ' + s.file_name + ' | ' + (res.reply || '');
+  else reply = '⚠️ File diterima tapi gagal disimpan ke Drive. Saya catat dulu, mohon kabari Claude. ' + (res.reply || '');
 }
 return [{ json: { chat_id: s.chat_id, task_id: s.task_id, reply, kind: res.kind || 'text' } }];
 """
