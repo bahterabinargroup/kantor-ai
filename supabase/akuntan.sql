@@ -1044,7 +1044,8 @@ on conflict (id) do update
 alter table public.akun_sheets  add column if not exists pisah_modal int generated always as (public.akun_int(raw->'pisah_modal')) stored;
 
 -- ── Laporan harian seperti sheet "LAPORAN HARIAN" (hanya service_role; tertutup untuk dashboard) ──
--- qris  : pencairan bank bila sudah ada (qris_status='final'), kalau belum angka kertas ('sementara').
+-- SATU METODE (sama dengan balasan bot): pemasukan = garis di lembar × harga menu. Cash selalu garis; selisih dengan uang di laci hanya jadi peringatan.
+-- qris  : pencairan bank bila sudah ada (qris_status='final'), kalau belum garis lembar ('sementara'). qris_kertas = angka tulisan barista (pembanding).
 -- online: pendapatan merchant bila sudah ada ('final'), kalau belum angka garis kertas ('sementara').
 -- crosscheck_qris = QRIS kertas − bank (0 = cocok). potongan_online = garis kertas (kotor) − merchant.
 drop view if exists public.akun_v_harian;   -- nama kolom berubah (kolom cash lama diganti cash_garis), view tidak bisa diganti di tempat
@@ -1064,8 +1065,8 @@ with d as (
 select d.tgl as tanggal,
        sh.cash_akhir, sh.modal, sh.pic,
        s.belanja as belanja_harian, s.cash_revenue, s.cash_sales as cash_garis, s.cash_variance,
-       coalesce(q.bank, s.qris_written)                      as qris,
-       case when q.bank is not null then 'final' when s.qris_written is not null then 'sementara' end as qris_status,
+       coalesce(q.bank, s.qris_sales)                        as qris,
+       case when q.bank is not null then 'final' when s.qris_sales is not null then 'sementara' end as qris_status,
        s.qris_written                                        as qris_kertas,
        q.bank                                                as qris_bank,
        case when q.bank is not null and s.qris_written is not null then s.qris_written - q.bank end as crosscheck_qris,

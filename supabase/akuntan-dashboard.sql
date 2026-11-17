@@ -14,7 +14,7 @@ with h as (
   select tanggal as tgl from h union select expense_date from ex union select expense_date from exl
 ), harian as (
   select d.tgl,
-         coalesce(h.cash_revenue, 0)  as cash,
+         coalesce(h.cash_garis, 0)    as cash,   -- garis lembar, sama dengan balasan bot (selisih laci hanya peringatan)
          coalesce(h.qris, 0)          as qris,
          coalesce(h.online, 0)        as online,
          coalesce(exl.jml, 0)         as belanja_lembar,
