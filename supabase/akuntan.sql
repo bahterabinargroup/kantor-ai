@@ -378,9 +378,25 @@ $$;
 -- sehingga di total pengeluaran hanya dihitung sekali (laporan teks dianggap utama: ada pelapor, toko, foto nota).
 -- Hitungan kas harian tetap memakai SEMUA belanja di lembar (itu uang yang keluar dari laci).
 alter table public.akun_expenses add column if not exists dup_of bigint;
+-- Apakah nominal p_amt disebut di teks sumber uang laporan? ("uang berdi 2.5k uang plastik 150k", "10.000", "10000")
+create or replace function public.akun_amt_in(p_src text, p_amt int) returns boolean
+language sql immutable as $$
+  select p_amt > 0 and coalesce(p_src, '') <> '' and (
+    lower(p_src) ~ ('(^|[^0-9.,])' || replace(trim_scale(p_amt / 1000.0)::text, '.', '[.,]') || '\s*(k|rb|ribu)')
+    or regexp_replace(regexp_replace(p_src, '([0-9])[.,]([0-9]{3})', '\1\2', 'g'), '([0-9])[.,]([0-9]{3})', '\1\2', 'g')
+       ~ ('(^|[^0-9])' || p_amt::text || '([^0-9]|$)'));
+$$;
+
+-- Satu pengeluaran bisa muncul dua kali (laporan teks/nota dan lembar harian). Ditandai lewat dup_of pada baris lembar
+-- (baris lembar tidak dihitung; laporan dihitung sekali). Tiga putaran:
+--   1) nominal sama persis (nama barang dipakai untuk memilih bila ada beberapa kandidat)
+--   2) baris lembar yang hanya SEBAGIAN dari satu laporan (mis. "Galon 10.000" dari galon 132k), nama barang beririsan
+--   3) beberapa baris lembar yang JUMLAHNYA persis sama dengan satu laporan dan nominalnya disebut di sumber uang laporan
+--      (mis. "uang beli Frozen 2.500" + "uang plastik Frozen 150.000" = laporan "kentang & otak" 152.500)
 create or replace function public.akun_dedupe(p_date date) returns int
 language plpgsql as $$
-declare l record; t record; v_best bigint; v_score int; v_s int; v_n int := 0; tok text;
+declare l record; t record; r record; v_best bigint; v_score int; v_s int; v_n int := 0; tok text;
+        v_sum bigint; v_ids bigint[];
 begin
   update public.akun_expenses set dup_of = null where origin = 'lembar' and expense_date = p_date and dup_of is not null;
   for l in select id, item, amount from public.akun_expenses
@@ -401,17 +417,12 @@ begin
       v_n := v_n + 1;
     end if;
   end loop;
-  -- Putaran 2: baris lembar yang cuma SEBAGIAN dari satu laporan (mis. lembar "Galon 10.000" = bagian
-  -- "uang berdi (10k)" dari laporan galon 132k). Syarat: nama barang beririsan, nominal lembar disebut di
-  -- sumber uang laporan (10k / 10.000 / 10000), dan jumlah bagian tidak melebihi nominal laporan.
   for l in select id, item, amount from public.akun_expenses
             where origin = 'lembar' and expense_date = p_date and amount > 0 and dup_of is null order by id loop
     v_best := null; v_score := 0;
     for t in select e.id, e.item from public.akun_expenses e
               where e.origin = 'laporan' and e.expense_date = p_date and e.amount > l.amount
-                and coalesce(e.source_raw,'') <> ''
-                and (   (l.amount % 1000 = 0 and lower(e.source_raw) ~ ('(^|[^0-9.,])' || (l.amount/1000)::text || '\s*(k|rb|ribu)'))
-                     or position(l.amount::text in regexp_replace(e.source_raw, '[.,]', '', 'g')) > 0)
+                and public.akun_amt_in(e.source_raw, l.amount)
                 and e.amount >= l.amount + coalesce((select sum(x.amount) from public.akun_expenses x where x.dup_of = e.id), 0)
               order by e.id loop
       v_s := 0;
@@ -423,6 +434,19 @@ begin
     if v_best is not null then
       update public.akun_expenses set dup_of = v_best where id = l.id;
       v_n := v_n + 1;
+    end if;
+  end loop;
+  for r in select e.id, e.amount, e.source_raw from public.akun_expenses e
+            where e.origin = 'laporan' and e.expense_date = p_date and coalesce(e.source_raw, '') <> ''
+              and not exists (select 1 from public.akun_expenses x where x.dup_of = e.id)
+            order by e.id loop
+    select coalesce(sum(x.amount), 0), array_agg(x.id) into v_sum, v_ids
+      from public.akun_expenses x
+     where x.origin = 'lembar' and x.expense_date = p_date and x.amount > 0 and x.dup_of is null
+       and public.akun_amt_in(r.source_raw, x.amount);
+    if v_ids is not null and v_sum = r.amount then
+      update public.akun_expenses set dup_of = r.id where id = any(v_ids);
+      v_n := v_n + array_length(v_ids, 1);
     end if;
   end loop;
   return v_n;
@@ -1168,7 +1192,7 @@ begin
     select p.oid::regprocedure as sig
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
-       and p.proname in ('akun_dedupe','akun_handle','akun_day_summary','dispatch_message','akun_pay_source','akun_match_vendor',
+       and p.proname in ('akun_dedupe','akun_amt_in','akun_handle','akun_day_summary','dispatch_message','akun_pay_source','akun_match_vendor',
                        'agent_chat_ok','agent_chat_scoped','akun_staff_of','akun_staff_name','akun_tag_staff')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
