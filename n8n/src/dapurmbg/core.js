@@ -38,7 +38,7 @@ function masterItems(rows) {
   const out = [];
   (rows || []).forEach((r, i) => {
     if (i === 0) return; const nm = r[1], pr = r[2];
-    if (nm && typeof pr === 'number') out.push({ row: i + 1, name: String(nm).trim(), k: norm(nm), price: pr });
+    if (nm && typeof pr === 'number') out.push({ row: i + 1, name: String(nm).trim(), k: norm(nm), price: pr, unit: norm(r[3]), note: norm(r[5]) });
   });
   return out;
 }
@@ -52,17 +52,33 @@ function rcRows(rows) {
   const out = [];
   for (let i = hi + 1; i < rows.length; i++) {
     const r = rows[i] || [];
-    for (const ci of cols) { const nm = r[ci - 1], v = r[ci]; if (nm && typeof v === 'number') out.push({ name: String(nm).trim(), v, row: i + 1 }); }
+    for (const ci of cols) { const nm = r[ci - 1], v = r[ci]; if (nm && typeof v === 'number') out.push({ name: String(nm).trim(), v, row: i + 1, unit: norm(r[ci + 1]), note: norm(r[ci + 2]) }); }
   }
   return out;
 }
-function findMaster(items, name, pred) {
-  const nm = ALIAS[norm(name)] || name;
+const sigs = (name, unit, note) => {
+  const t = norm(name + ' ' + unit + ' ' + note).replace(/(\d+)\s*(gr|g|gram)\b/g, '$1gr').replace(/(\d+)\s*(kg|kilo)\b/g, '$1kg').replace(/\bkilo\b/g, 'kg').replace(/\bgram\b/g, 'gr');
+  return new Set(t.split(/[^a-z0-9]+/).filter(x => /^(\d+(gr|kg|ml|l|pcs)|kg|gr|pcs|pack|ikat|btl|botol|liter|ml|sachet|saset|dus|box)$/.test(x)));
+};
+const unitOf = u => norm(u).replace(/\bkilo\b/, 'kg').replace(/\bgram\b/, 'gr').replace(/^1\s*(kg|gr|l|liter)$/, '$1');
+function pickBest(cands, rc) {
+  if (cands.length <= 1) return cands[0] || null;
+  const rs = sigs('', rc.unit || '', rc.note || '');
+  const sc = cands.map(x => { const ms = sigs(x.name, x.unit, x.note); let n = 0; for (const t of rs) if (ms.has(t)) n++; return { x, n }; });
+  sc.sort((a, b) => b.n - a.n);
+  if (sc[0].n > sc[1].n) return sc[0].x;
+  return null; // seri: tidak bisa dibedakan dari satuan/keterangan
+}
+function findMaster(items, rc, pred, suffix) {
+  const nm0 = ALIAS[norm(rc.name)] || rc.name; const nm = nm0 + (suffix || '');
   const k = norm(nm); const cand = items.filter(pred);
-  let m = cand.filter(x => x.k === k); if (m.length) return { item: m[0], how: 'exact' };
-  const kk = key(nm); m = cand.filter(x => key(x.name) === kk); if (m.length === 1) return { item: m[0], how: 'key' };
-  let best = null, bs = 0; for (const x of cand) { const s = dice(nm, x.name); if (s > bs) { bs = s; best = x; } }
-  if (best && bs >= 0.85) return { item: best, how: 'mirip', score: bs };
+  let m = cand.filter(x => x.k === k);
+  if (m.length) { const b = pickBest(m, rc); return b ? { item: b, how: 'exact' } : { item: m[0], how: 'exact', ambiguous: true }; }
+  const kk = key(nm); m = cand.filter(x => key(x.name) === kk);
+  if (m.length) { const b = pickBest(m, rc); if (b) return { item: b, how: 'key' }; if (m.length > 1) return { item: m[0], how: 'key', ambiguous: true }; }
+  const sc = cand.map(x => ({ x, s: dice(nm, x.name) })).filter(o => o.s >= 0.85);
+  if (sc.length) { const b = pickBest(sc.map(o => o.x), rc) || (sc.length === 1 ? sc[0].x : null);
+    if (b) return { item: b, how: 'mirip' }; return { item: sc[0].x, how: 'mirip', ambiguous: true }; }
   return null;
 }
 function ayamKind(n) {
@@ -83,6 +99,14 @@ function classify(gridsList) {
   return { sepakat, sawangan };
 }
 
+function reasons(m, rc) {
+  const r = [];
+  if (m.ambiguous) r.push('ada beberapa baris serupa di master, satuan/keterangan tidak membedakan');
+  if (m.how === 'mirip') r.push('nama mirip dengan "' + rc.name + '"');
+  const ru = unitOf(rc.unit), mu = unitOf(m.item.unit);
+  if (ru && mu && ru !== mu) r.push('satuan beda (RC 0: ' + ru + ', master: ' + mu + ')');
+  return r;
+}
 function buildPlan(masterG, sep, saw) {
   const items = [], unsure = [], unmatched = [], skipped = [], targets = new Map();
   const add = (e, reasons) => {
@@ -99,11 +123,10 @@ function buildPlan(masterG, sep, saw) {
         const ex = EXCLUDE.find(([re]) => re.test(rc.name)); if (ex) { skipped.push(rc.name + ' (' + ex[1] + ')'); continue; }
         if (/^ayam /i.test(rc.name)) continue;
         const pred = x => !/^[su] ?ayam/i.test(x.name) && !(tab === 'SAYURAN' && x.k.endsWith(' s'));
-        const m = findMaster(mi, rc.name, pred);
+        const m = findMaster(mi, rc, pred);
         if (!m) { unmatched.push(rc.name); continue; }
         if (m.item.price === rc.v) continue;
-        add({ tab, row: m.item.row, name: m.item.name, old: m.item.price, new: rc.v, src: 'sepakat', via: m.how === 'key' ? rc.name : null },
-            m.how === 'mirip' ? ['nama mirip dengan "' + rc.name + '"'] : []);
+        add({ tab, row: m.item.row, name: m.item.name, old: m.item.price, new: rc.v, src: 'sepakat', via: m.how === 'key' ? rc.name : null }, reasons(m, rc));
       }
     }
   }
@@ -113,11 +136,10 @@ function buildPlan(masterG, sep, saw) {
     const rows = saw.grid[Object.keys(saw.grid)[0]];
     for (const rc of rcRows(rows)) {
       const ex = EXCLUDE.find(([re]) => re.test(rc.name)); if (ex) continue;
-      const m = findMaster(mi, rc.name + ' S', x => x.k.endsWith(' s'));
+      const m = findMaster(mi, rc, x => x.k.endsWith(' s'), ' S');
       if (!m) { unmatched.push(rc.name + ' (Sawangan)'); continue; }
       if (m.item.price === rc.v) continue;
-      add({ tab: 'SAYURAN', row: m.item.row, name: m.item.name, old: m.item.price, new: rc.v, src: 'sawangan', via: m.how === 'key' ? rc.name : null },
-          m.how === 'mirip' ? ['nama mirip dengan "' + rc.name + '"'] : []);
+      add({ tab: 'SAYURAN', row: m.item.row, name: m.item.name, old: m.item.price, new: rc.v, src: 'sawangan', via: m.how === 'key' ? rc.name : null }, reasons(m, rc));
     }
   }
   // Ayam: harga tertinggi per area
