@@ -163,7 +163,8 @@ return [{ json: {
   message_id: key.id,
   chat_id: chatId,
   is_group: chatId.endsWith('@g.us'),
-  sender: key.participant || d.participant || chatId,
+  // pesan yang dikirim ulang WhatsApp (setelah gagal dibuka) bisa tanpa participant; nama pengirim lalu ada di pushName (berbentuk ...@lid)
+  sender: key.participant || d.participant || (/@(lid|s\.whatsapp\.net)$/.test(d.pushName || '') ? d.pushName : '') || chatId,
   push_name: d.pushName || '',
   text,
   message_type: d.messageType || Object.keys(m)[0] || 'unknown',
