@@ -30,6 +30,18 @@ try:
 except Exception: print('')"
 }
 
+sudah_tercatat() { # sudah_tercatat PENGIRIM T0 T1 → "ya" bila ada laporan pengirim itu tercatat sekitar waktu pesan gagal
+  [ -n "$SB_URL" ] && [ -n "$SB_KEY" ] || { echo tidak; return 0; }
+  A="$(date -u -d "@$(( $2 - 180 ))" '+%Y-%m-%dT%H:%M:%SZ')"; B="$(date -u -d "@$(( $3 + 480 ))" '+%Y-%m-%dT%H:%M:%SZ')"
+  curl -sS -m 10 -G "$SB_URL/rest/v1/ipal_reports" -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
+    --data-urlencode "select=id" --data-urlencode "sender=eq.$1" --data-urlencode "kitchen_id=not.is.null" \
+    --data-urlencode "reported_at=gte.$A" --data-urlencode "limit=1" -H "Range-Unit: items" 2>/dev/null \
+  | python3 -c "import sys,json
+try:
+  print('ya' if json.load(sys.stdin) else 'tidak')
+except Exception: print('tidak')" 
+}
+
 # ── 1) Pesan gagal dibuka di grup IPAL ──
 LOGS="$(docker compose logs evolution-api --since 12m --no-log-prefix 2>&1)"
 NOW="$(date +%s)"
@@ -53,11 +65,14 @@ for line in sys.stdin:
     if k.get('remoteJid') != group or k.get('fromMe'): continue
     mid = k.get('id'); who = k.get('participant') or '?'
     if not mid or mid in seen: continue
+    if now - j.get('time', 0) / 1000 < 240: continue   # tunggu 4 menit: beri waktu laporan (foto lain di album) tercatat
     if now - cd.get(who, 0) < 300: continue        # sudah diperingatkan <5 menit lalu; ikut di peringatan berikutnya
     t = datetime.fromtimestamp(j.get('time', 0) / 1000, timezone(timedelta(hours=7))).strftime('%H:%M')
-    o = out.setdefault(who, {'ids': [], 'jam': t}); o['ids'].append(mid)
+    ts = int(j.get('time', 0) / 1000)
+    o = out.setdefault(who, {'ids': [], 'jam': t, 't0': ts, 't1': ts}); o['ids'].append(mid)
+    o['t0'] = min(o['t0'], ts); o['t1'] = max(o['t1'], ts)
 for who, o in out.items():
-    print(json.dumps({'who': who, 'n': len(o['ids']), 'jam': o['jam'], 'ids': o['ids']}))
+    print(json.dumps({'who': who, 'n': len(o['ids']), 'jam': o['jam'], 'ids': o['ids'], 't0': o['t0'], 't1': o['t1']}))
 " "$GROUP" "$ST/seen" "$ST/cooldown" "$NOW" > "$ST/baru.jsonl"
 
 while IFS= read -r row; do
@@ -66,6 +81,12 @@ while IFS= read -r row; do
   N="$(echo "$row" | python3 -c 'import sys,json;print(json.load(sys.stdin)["n"])')"
   JAM="$(echo "$row" | python3 -c 'import sys,json;print(json.load(sys.stdin)["jam"])')"
   IDS="$(echo "$row" | python3 -c 'import sys,json;print(" ".join(json.load(sys.stdin)["ids"]))')"
+  T0="$(echo "$row" | python3 -c 'import sys,json;print(json.load(sys.stdin)["t0"])')"
+  T1="$(echo "$row" | python3 -c 'import sys,json;print(json.load(sys.stdin)["t1"])')"
+  if [ "$(sudah_tercatat "$WHO" "$T0" "$T1")" = "ya" ]; then
+    echo $IDS | tr ' ' '\n' >> "$ST/seen"     # laporan tetap tercatat (foto lain di album masuk) → tidak perlu alarm
+    continue
+  fi
   DAPUR="$(dapur_dari "$WHO")"
   ORANG="${DAPUR:+dapur $DAPUR (}$WHO${DAPUR:+)}"
   MSG="⚠️ ALARM IPAL: $N pesan di grup IPAL GAGAL dibuka bot, dari $ORANG, sekitar jam $JAM WIB.
