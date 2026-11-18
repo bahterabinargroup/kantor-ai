@@ -520,6 +520,7 @@ declare
   -- pengeluaran
   e jsonb; v_amount int; v_item text; v_edate date; v_total int; v_rows int; v_id bigint; v_has_media boolean := false;
   v_pend record; v_photo jsonb := p->'photo'; v_vendor text; v_pay text;
+  v_who text;
   rw jsonb; rc record; v_n int; v_ok int; v_sd date; v_rd date; v_amt int; v_diff text; v_nolembar text; v_tot_k numeric; v_tot_m numeric; v_mer text;
 begin
   -- bersihkan foto yatim (> 2 hari)
@@ -604,6 +605,38 @@ begin
     get diagnostics v_rows = row_count;
     if v_rows = 0 then return jsonb_build_object('reply', null, 'duplicate', true); end if;
     return jsonb_build_object('reply', 'Pengeluaran sudah aku catat kakak Meita 🙏');
+  end if;
+
+  -- ═══ PENGEMBALIAN UANG PLASTIK ═══
+  -- "mas Raka mengembalikan uang plastik 4,5k": sisa uang dari pengambilan plastik (laporan "diambil ... / uang plastik", 3 hari terakhir)
+  -- yang barangnya tidak sampai. Nominal pengambilan dikurangi, jadi belanja yang dihitung = yang benar-benar terpakai.
+  -- p.refund = {amount, who?}. who dicocokkan dengan nama di keterangan pengambilan; kosong = pengambilan plastik terbaru.
+  if v_kind = 'refund' then
+    v_amount := public.akun_int(p->'refund'->'amount');
+    v_who := lower(nullif(btrim(coalesce(p->'refund'->>'who', '')), ''));
+    if v_amount is null or v_amount <= 0 then
+      return jsonb_build_object('reply', 'Nominal pengembaliannya belum terbaca. Contoh: mas Raka mengembalikan uang plastik 4,5k');
+    end if;
+    select x.* into v_pend from public.akun_expenses x
+     where x.origin = 'laporan' and x.pay_source = 'plastik' and x.expense_date >= v_today - 3
+       and x.amount > v_amount
+       and public.akun_norm(x.item) ~ '(diambil|ambil|pinjam)'
+       and (v_who is null or public.akun_norm(x.item) like '%' || public.akun_norm(v_who) || '%')
+     order by x.expense_date desc, x.id desc limit 1;
+    if v_pend.id is null then
+      return jsonb_build_object('reply', '❓ Pengembalian uang plastik ' || public.akun_rp(v_amount) ||
+        ' belum bisa dicocokkan: tidak ada pengambilan plastik (laporan "diambil ...") dalam 3 hari terakhir' ||
+        case when v_who is not null then ' atas nama ' || initcap(v_who) else '' end ||
+        ' yang nominalnya lebih besar. Tulis dulu laporan pengambilannya, atau kirim "koreksi".');
+    end if;
+    update public.akun_expenses
+       set amount = v_pend.amount - v_amount,
+           item = left(btrim(v_pend.item) || ' [kembali ' || public.akun_rp(v_amount) || ']', 120),
+           flags = coalesce(v_pend.flags, '[]'::jsonb) || to_jsonb('kembali ' || public.akun_rp(v_amount) || ' (pesan ' || coalesce(v_msg, '?') || ')')
+     where id = v_pend.id;
+    return jsonb_build_object('reply',
+      '✅ Dicatat: pengembalian uang plastik ' || public.akun_rp(v_amount) || E'.\n' ||
+      'Pengambilan ' || public.akun_rp(v_pend.amount) || ' → belanja yang dihitung ' || public.akun_rp(v_pend.amount - v_amount) || '.');
   end if;
 
   -- ═══ KOREKSI BELANJA LEMBAR ═══
@@ -1034,7 +1067,7 @@ end $$;
 -- Tidak menimpa config/enabled bila baris sudah ada.
 insert into public.agents (id, name, role, emoji, color, triggers, priority, enabled, desk, config)
 values ('akuntan', 'Admin Berdikari', 'Admin kafe: lembar harian, belanja, fee & bon karyawan', '🧾', '#f59e0b',
-        array['@media', 'laporan pengeluaran', 'nominal pengeluaran', 'koreksi'],
+        array['@media', 'laporan pengeluaran', 'nominal pengeluaran', 'koreksi', 'embalikan', 'pengembalian'],
         8, false, '{"x":-2,"z":0}', '{"redact_events": true}')
 on conflict (id) do update
   set name = excluded.name, role = excluded.role, emoji = excluded.emoji, color = excluded.color,
