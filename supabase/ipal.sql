@@ -486,11 +486,9 @@ begin
   ), agg as (
     select kitchen_id, count(*) as n from upd group by kitchen_id
   )
-  select array_agg(
-           case when p.kitchen_id is not null
-                then 'ℹ️ ' || k.name || ' sudah lapor hari ini. Foto/video tambahan dicatat.'
-                else '✅ Laporan IPAL ' || k.name || ' tercatat.' end
-           order by k.position)
+  -- foto/video tambahan dari dapur yang SUDAH dikonfirmasi hari ini: dicatat diam-diam (tanpa balasan)
+  select array_agg('✅ Laporan IPAL ' || k.name || ' tercatat.' order by k.position)
+           filter (where p.kitchen_id is null)
     into v_lines
     from agg a join public.ipal_kitchens k on k.id = a.kitchen_id
     left join prev p on p.kitchen_id = a.kitchen_id;
