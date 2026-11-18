@@ -12,15 +12,15 @@
         -220
       ],
       "parameters": {
-        "content": "Dua pengingat ke grup (IPAL_GROUP_JID di .env):\n• 17:00 WIB (Senin–Jumat): dapur yang BELUM lapor hari ini.\n• 06:00 WIB (Selasa–Sabtu): dapur yang KEMARIN tidak lapor sama sekali.\nSemua sudah lapor → tidak kirim apa-apa.",
+        "content": "Dua pengingat ke grup (IPAL_GROUP_JID di .env):\n• 20:00 WIB (Senin–Jumat): dapur yang BELUM lapor hari ini.\n• 06:00 WIB (Selasa–Sabtu): dapur yang KEMARIN tidak lapor sama sekali.\nSemua sudah lapor → tidak kirim apa-apa.",
         "width": 460,
         "height": 130,
         "color": 4
       }
     },
     {
-      "id": "00971c91-6a2e-5fa9-b47c-0395b1d8f2e7",
-      "name": "17:00 WIB",
+      "id": "66ea0a45-b691-5f09-8223-61f46727d65b",
+      "name": "20:00 WIB",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -32,7 +32,7 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 17 * * 1-5"
+              "expression": "0 20 * * 1-5"
             }
           ]
         }
@@ -162,7 +162,7 @@
     }
   ],
   "connections": {
-    "17:00 WIB": {
+    "20:00 WIB": {
       "main": [
         [
           {

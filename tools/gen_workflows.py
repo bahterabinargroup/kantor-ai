@@ -372,11 +372,11 @@ workflow("agent-ipal.json", "agent:ipal", ipal_nodes, ipal_links)
 # ───────────────────────── sys:ipal-reminder ─────────────────────────
 workflow("sys-ipal-reminder.json", "sys:ipal-reminder", [
     note("Dua pengingat ke grup (IPAL_GROUP_JID di .env):\n"
-         "• 17:00 WIB (Senin–Jumat): dapur yang BELUM lapor hari ini.\n"
+         "• 20:00 WIB (Senin–Jumat): dapur yang BELUM lapor hari ini.\n"
          "• 06:00 WIB (Selasa–Sabtu): dapur yang KEMARIN tidak lapor sama sekali.\n"
          "Semua sudah lapor → tidak kirim apa-apa.", [0, -220], 460, 130),
-    {"id": nid(), "name": "17:00 WIB", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2,
-     "position": [0, 0], "parameters": {"rule": {"interval": [{"field": "cronExpression", "expression": "0 17 * * 1-5"}]}}},
+    {"id": nid(), "name": "20:00 WIB", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2,
+     "position": [0, 0], "parameters": {"rule": {"interval": [{"field": "cronExpression", "expression": "0 20 * * 1-5"}]}}},
     {"id": nid(), "name": "06:00 WIB", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2,
      "position": [0, 220], "parameters": {"rule": {"interval": [{"field": "cronExpression", "expression": "0 6 * * 2-6"}]}}},
     rpc("Belum lapor hari ini (RPC)", "ipal_pending_today", "={{ JSON.stringify({}) }}", [260, 0]),
@@ -384,7 +384,7 @@ workflow("sys-ipal-reminder.json", "sys:ipal-reminder", [
     if_not_empty("Ada yang belum?", "={{ $json.reply }}", [540, 100]),
     http("Kirim pengingat", N8N + "lib-send-wa",
          "={{ JSON.stringify({ chat_id: $env.IPAL_GROUP_JID, text: $json.reply }) }}", [800, 40]),
-], [link("17:00 WIB", "Belum lapor hari ini (RPC)"), link("06:00 WIB", "Belum lapor kemarin (RPC)"),
+], [link("20:00 WIB", "Belum lapor hari ini (RPC)"), link("06:00 WIB", "Belum lapor kemarin (RPC)"),
     link("Belum lapor hari ini (RPC)", "Ada yang belum?"), link("Belum lapor kemarin (RPC)", "Ada yang belum?"),
     link("Ada yang belum?", "Kirim pengingat", 0)])
 _p = OUT / "sys-ipal-reminder.json"

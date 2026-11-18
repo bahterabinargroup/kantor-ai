@@ -242,7 +242,7 @@ language sql stable as $$
     'total_n', (select count(*) from s),
     'reply',   case when exists (select 1 from s where not sudah)
                      and coalesce((select enabled from public.agents where id = 'ipal'), false) then
-                 '⏰ Pengingat sore. Mohon maaf mengganggu, dapur berikut BELUM melaporkan kebersihan IPAL hari ' || public.ipal_tgl_id((now() at time zone 'Asia/Jakarta')::date) || ':' || E'\n' ||
+                 '⏰ Pengingat malam. Mohon maaf mengganggu, dapur berikut BELUM melaporkan kebersihan IPAL hari ' || public.ipal_tgl_id((now() at time zone 'Asia/Jakarta')::date) || ':' || E'\n' ||
                  (select string_agg('• ' || name, E'\n' order by name) from s where not sudah) || E'\n\n' ||
                  'Tolong kirimkan foto + nama dapur di grup ini ya. Terima kasih banyak atas kerjasamanya 🙏'
                  when coalesce((select enabled from public.agents where id = 'ipal'), false) then
