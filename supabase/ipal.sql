@@ -158,16 +158,14 @@ begin
   select count(*) into v_before from public.ipal_reports
    where kitchen_id = v_id and report_date = (now() at time zone 'Asia/Jakarta')::date and has_media;
 
-  -- teks saja → gabungkan dengan foto tanpa caption dari pengirim yang sama (≤20 menit)
+  -- teks saja → gabungkan SEMUA foto tanpa caption dari pengirim yang sama (≤20 menit), bukan hanya satu
   if not v_media and p_sender is not null then
-    select r.id into v_pend from public.ipal_reports r
-     where r.sender = p_sender and r.chat_id = p_chat_id and r.kitchen_id is null and r.has_media
-       and r.reported_at > now() - interval '20 minutes'
-     order by r.reported_at desc limit 1;
-    if v_pend is not null then
-      update public.ipal_reports
-         set kitchen_id = v_id, match_method = 'photo_then_text', snippet = left(btrim(coalesce(p_text, '')), 80)
-       where id = v_pend;
+    update public.ipal_reports
+       set kitchen_id = v_id, match_method = 'photo_then_text', snippet = left(btrim(coalesce(p_text, '')), 80)
+     where sender = p_sender and chat_id = p_chat_id and kitchen_id is null and has_media
+       and reported_at > now() - interval '20 minutes';
+    get diagnostics v_rows = row_count;
+    if v_rows > 0 then
       return jsonb_build_object('matched', true, 'attached', true, 'kitchen_id', v_id, 'kitchen_name', v_name,
                                 'method', 'photo_then_text', 'has_media', true,
                                 'already_reported_today', v_before > 0);
