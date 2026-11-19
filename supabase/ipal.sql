@@ -196,6 +196,20 @@ end $$;
 
 -- ── Status hari ini ─────────────────────────────────────────────────
 -- p_require_media = true → hanya laporan yang ada foto/medianya yang dihitung SUDAH.
+-- ── Libur dapur (tidak diingatkan) ─────────────────────────────────
+-- Dapur yang libur pada rentang tanggal ini TIDAK dihitung "belum lapor" di pengingat. Berakhir otomatis setelah 'sampai'.
+-- Bila dapur libur tetap melapor, laporannya tetap dihitung.
+create table if not exists public.ipal_libur (
+  id         bigint generated always as identity primary key,
+  kitchen_id text not null references public.ipal_kitchens(id) on update cascade on delete cascade,
+  dari       date not null,
+  sampai     date not null check (sampai >= dari),
+  alasan     text,
+  unique (kitchen_id, dari, sampai)
+);
+alter table public.ipal_libur enable row level security;
+grant all on public.ipal_libur to service_role;
+
 create or replace function public.ipal_status_day(p_day date, p_require_media boolean default true)
 returns table (kitchen_id text, name text, sudah boolean, reports int, first_report_at timestamptz)
 language sql stable as $$
@@ -210,6 +224,8 @@ language sql stable as $$
           and (r.has_media or not p_require_media)
    where k.enabled
    group by k.id, k.name, k.position
+  having count(r.id) > 0
+      or not exists (select 1 from public.ipal_libur l where l.kitchen_id = k.id and p_day between l.dari and l.sampai)
    order by k.position;
 $$;
 
