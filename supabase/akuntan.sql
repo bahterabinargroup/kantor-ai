@@ -639,6 +639,36 @@ begin
       'Pengambilan ' || public.akun_rp(v_pend.amount) || ' → belanja yang dihitung ' || public.akun_rp(v_pend.amount - v_amount) || '.');
   end if;
 
+  -- ═══ KOREKSI LAPORAN PENGELUARAN ═══
+  -- "koreksi 40k" (tanpa nama barang) = laporan pengeluaran terbaru si pengirim (hari ini/kemarin);
+  -- "koreksi 23/11: yakulst 40k" (dengan nama barang, tanpa lembar tanggal itu) = laporan bernama itu pada tanggalnya.
+  -- p.korlap = {amount, item?, date?}. Hanya nominal yang diganti; sisanya tetap.
+  if v_kind = 'koreksi_laporan' then
+    v_amount := public.akun_int(p->'korlap'->'amount');
+    v_item := nullif(btrim(coalesce(p->'korlap'->>'item', '')), '');
+    begin v_edate := (p->'korlap'->>'date')::date; exception when others then v_edate := null; end;
+    if v_amount is null or v_amount <= 0 then
+      return jsonb_build_object('reply', 'Nominal koreksinya belum terbaca. Contoh: koreksi 40k');
+    end if;
+    select x.* into v_pend from public.akun_expenses x
+     where x.origin = 'laporan' and x.dup_of is null
+       and (case when v_edate is not null then x.expense_date = v_edate else x.expense_date >= v_today - 1 end)
+       and (case when v_item is not null then public.akun_norm(x.item) like '%' || public.akun_norm(v_item) || '%'
+                 else (v_sender is not null and x.sender = v_sender and x.chat_id = v_chat) end)
+     order by x.expense_date desc, x.id desc limit 1;
+    if v_pend.id is null then
+      return jsonb_build_object('reply', '❓ Tidak ketemu laporan pengeluaran' || case when v_item is not null then ' "' || v_item || '"' else ' darimu' end ||
+        case when v_edate is not null then ' tanggal ' || public.akun_tgl(v_edate) else ' hari ini/kemarin' end ||
+        E' yang bisa dikoreksi.\nContoh: koreksi 23/11: yakulst 40k');
+    end if;
+    update public.akun_expenses
+       set amount = v_amount,
+           flags = coalesce(v_pend.flags, '[]'::jsonb) || to_jsonb('koreksi ' || public.akun_rp(v_pend.amount) || ' → ' || public.akun_rp(v_amount) || ' (pesan ' || coalesce(v_msg, '?') || ')')
+     where id = v_pend.id;
+    return jsonb_build_object('reply',
+      '✏️ Dikoreksi: ' || btrim(v_pend.item) || ' ' || public.akun_rp(v_pend.amount) || ' → ' || public.akun_rp(v_amount) || ' · ' || public.akun_tgl(v_pend.expense_date));
+  end if;
+
   -- ═══ KOREKSI BELANJA LEMBAR ═══
   -- p.date (boleh kosong = lembar terakhir), p.items = [{item, amount}] → menggantikan seluruh daftar belanja lembar itu,
   -- lalu lembar diproses ulang (cash, selisih, dsb. dihitung ulang).
@@ -649,6 +679,15 @@ begin
     end if;
     select raw into s from public.akun_sheets where sheet_date = v_date;
     if s is null then
+      -- tidak ada lembar: mungkin yang dikoreksi laporan pengeluaran bernama itu ("koreksi 23/11: yakulst 40k")
+      v_reply := ''; v_ok := 0;
+      for ex in select * from jsonb_array_elements(coalesce(p->'items', '[]'::jsonb)) loop
+        v_res := public.akun_handle(jsonb_build_object('kind', 'koreksi_laporan', 'sender', v_sender, 'chat_id', v_chat, 'message_id', v_msg,
+                   'korlap', jsonb_build_object('amount', ex->'amount', 'item', ex->>'item', 'date', p->>'date')));
+        if v_res->>'reply' like '✏️%' then v_ok := v_ok + 1; end if;
+        v_reply := v_reply || case when v_reply = '' then '' else E'\n' end || coalesce(v_res->>'reply', '');
+      end loop;
+      if v_ok > 0 then return jsonb_build_object('reply', v_reply); end if;
       return jsonb_build_object('reply', 'Lembar ' || coalesce(public.akun_tgl(v_date), 'itu') || ' belum tercatat, jadi belum bisa dikoreksi. Kirim foto lembarnya dulu.');
     end if;
     s := (s - 'uncertain') || jsonb_build_object('date', v_date::text, 'date_confident', true,
