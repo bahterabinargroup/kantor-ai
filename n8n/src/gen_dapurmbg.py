@@ -293,14 +293,22 @@ fail_to_lapor(S + "ambil rencana", S + "baca lama", S + "tulis", S + "baca baru"
 D = "PDF: "
 add(state_get(D + "ambil rencana", [xs(0), y(5)]),
     code(D + "nama", [xs(1), y(5)], r"""const plan = $json.val || {};
-const arg = String($('Siapkan').first().json.arg || '');
-let month = plan.month, week = plan.week, dates = plan.dates;
-const a = /(\S+)\s+week\s*(\d+)\s+(\d{1,2})\s*-\s*(\d{1,2})/i.exec(arg);
-if (a) { month = a[1]; week = a[2]; dates = a[3] + '-' + a[4]; }
-if (!month || !week || !dates) return [{ json: { ok: false, reply: 'Saya belum tahu minggu dan tanggalnya. Ketik *proses* dulu, atau tulis: *pdf November Week 4 22-26*' } }];
-month = month.charAt(0).toUpperCase() + month.slice(1).toLowerCase();
-const base = ' PAGU DAPUR - ' + month + ' Week ' + week + '(' + dates + month + ').pdf';
-return [{ json: { ok: true, label: month + ' Week ' + week + ' (' + dates + ')', names: { U: 'U' + base, S: 'S' + base, W: 'SAWANGAN' + base } } }];"""),
+const arg = String($('Siapkan').first().json.arg || '').replace(/[()]/g, ' ');
+const MON = ['januari','februari','maret','april','mei','juni','juli','agustus','september','oktober','november','desember'];
+const mi = s => { s = String(s || '').toLowerCase(); return s.length < 3 ? -1 : MON.findIndex(m => m.startsWith(s.slice(0, 3))); };
+const cap = i => MON[i].charAt(0).toUpperCase() + MON[i].slice(1);
+let month = plan.month, week = plan.week, dates = plan.dates, sm = -1, em = -1;
+const a = /([a-z]+)\s+week\s*(\d+)\s+(\d{1,2})\s*([a-z]*)\s*-\s*(\d{1,2})\s*([a-z]*)/i.exec(arg);
+if (a) { month = a[1]; week = a[2]; dates = a[3] + '-' + a[5]; sm = mi(a[4]); em = mi(a[6]); }
+if (!month || !week || !dates) return [{ json: { ok: false, reply: 'Saya belum tahu minggu dan tanggalnya. Ketik *proses* dulu, atau tulis: *pdf November Week 4 22-26* (lintas bulan: *pdf Desember Week 1 29nov-3des*)' } }];
+const mm = mi(month);
+if (mm < 0) return [{ json: { ok: false, reply: 'Nama bulan "' + month + '" tidak saya kenali. Contoh: *pdf Desember Week 1 29-3*' } }];
+const d = String(dates).split('-').map(Number);
+if (em < 0) em = mm;
+if (sm < 0) sm = d[0] > d[1] ? (em + 11) % 12 : em;
+const range = sm === em ? d[0] + '-' + d[1] + cap(em) : d[0] + cap(sm) + '-' + d[1] + cap(em);
+const base = ' PAGU DAPUR - ' + cap(mm) + ' Week ' + week + '(' + range + ').pdf';
+return [{ json: { ok: true, label: cap(mm) + ' Week ' + week + ' (' + range + ')', names: { U: 'U' + base, S: 'S' + base, W: 'SAWANGAN' + base } } }];"""),
     if_ok(D + "nama ok?", [xs(2), y(5)]),
     wa(D + "kabar", [xs(3), y(5)], "'⏳ Membuat 3 PDF PAGU DAPUR (' + $('PDF: nama').first().json.label + ')…'"),
     g(D + "baca PAGU", [xs(4), y(5)], "GET", "=%s%s?includeGridData=true&ranges={{ encodeURIComponent(\"'BAHAN BAKU ALL'!A1:G600\") }}&fields={{ encodeURIComponent('sheets(properties(title,sheetId),data(rowData(values(effectiveValue)),rowMetadata(hiddenByUser)))') }}" % (SHEETS, PAGU_ID)),
