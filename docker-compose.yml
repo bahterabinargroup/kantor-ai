@@ -136,6 +136,8 @@ services:
     environment:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    volumes:
+      - ./data/vps:/usr/share/nginx/html/vps-data:ro   # kondisi VPS dari scripts/vps-stats.py (halaman /vps.html)
 
   # ───────────── Reverse proxy + HTTPS otomatis ─────────────
   caddy:
