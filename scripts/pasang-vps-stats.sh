@@ -4,9 +4,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 command -v python3 >/dev/null || { echo "python3 tidak ada"; exit 1; }
-mkdir -p data/vps
-sudo chown -R "$USER":"$USER" data/vps 2>/dev/null || true   # bila sempat dibuat Docker sebagai root
-chmod 755 data data/vps
+# Folder data/ bisa dimiliki root (dibuat Docker), jadi pakai sudo bila perlu.
+mkdir -p data/vps 2>/dev/null || sudo mkdir -p data/vps
+sudo chown -R "$USER":"$USER" data/vps
+sudo chmod 755 data data/vps
 chmod +x scripts/vps-stats.py
 ( crontab -l 2>/dev/null | grep -v vps-stats.py || true; echo "* * * * * /usr/bin/python3 $HOME/kantor-ai/scripts/vps-stats.py >> $HOME/vps-stats.log 2>&1" ) | crontab -
 echo "Menjalankan pencatatan pertama…"
