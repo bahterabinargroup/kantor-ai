@@ -94,9 +94,12 @@ for l in sh("docker stats --no-stream --format '{{json .}}'", 30).splitlines():
 def top(key):
     out = []
     for l in sh(f"ps -eo comm,pcpu,pmem,rss --sort=-{key} --no-headers | head -6").splitlines():
-        p = l.split()
-        if len(p) >= 4:
-            out.append({"cmd": p[0], "cpu": float(p[1]), "mem": float(p[2]), "rss": int(p[3]) * 1024})
+        p = l.split()   # nama proses bisa berisi spasi: baca 3 angka dari kanan
+        try:
+            if len(p) >= 4:
+                out.append({"cmd": " ".join(p[:-3]), "cpu": float(p[-3]), "mem": float(p[-2]), "rss": int(p[-1]) * 1024})
+        except ValueError:
+            pass
     return out
 
 latest = {
