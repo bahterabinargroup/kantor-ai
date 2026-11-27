@@ -41,6 +41,7 @@
 
 # Rakazo (asisten AI berkomputer) — dipasang oleh scripts/pasang-rakazo.sh.
 # Caddy harus tersambung ke jaringan Docker milik Rakazo (dilakukan skrip itu); bila belum, hanya halaman ini yang 502.
-{$RAKAZO_DOMAIN} {
+# Nilai cadangan rakazo.localhost wajib: tanpa itu, kontainer Caddy lama (tanpa RAKAZO_DOMAIN) membaca alamat kosong dan gagal start (insiden 27 Nov 2026).
+{$RAKAZO_DOMAIN:rakazo.localhost} {
 	reverse_proxy web:5173
 }
