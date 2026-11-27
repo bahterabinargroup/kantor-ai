@@ -151,6 +151,7 @@ services:
       N8N_DOMAIN: ${N8N_DOMAIN}
       EVOLUTION_DOMAIN: ${EVOLUTION_DOMAIN}
       DASHBOARD_DOMAIN: ${DASHBOARD_DOMAIN}
+      RAKAZO_DOMAIN: ${RAKAZO_DOMAIN:-rakazo.localhost}
       DASHBOARD_USER: ${DASHBOARD_USER:-admin}
       DASHBOARD_PASS_HASH: ${DASHBOARD_PASS_HASH:?jalankan ./setup.sh untuk membuat password dashboard}
     volumes:
